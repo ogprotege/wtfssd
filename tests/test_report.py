@@ -63,6 +63,10 @@ class TestReport(unittest.TestCase):
         self.assertEqual(data["grade"], "A")
         self.assertEqual(data["report"]["smart"]["percent_used"], 1)
         self.assertEqual(data["findings"][0]["code"], "procs.ghosts")
+        self.assertEqual(data["findings"][0]["evidence"], "measured")
+        self.assertEqual(data["domains"]["processes"], "warn")
+        self.assertEqual(data["domains"]["drive"], "ok")
+        self.assertEqual(data["domains"]["backup"], "unknown")
 
     def test_history_table(self):
         rep, _ = sample()
@@ -70,6 +74,14 @@ class TestReport(unittest.TestCase):
         self.assertIn("13.0", text)
         self.assertIn("2026-07-30", text)
         self.assertIn("TIMESTAMP", text.upper())
+
+
+class TestDomainTable(unittest.TestCase):
+    def test_domain_table_marks_statuses(self):
+        lines = report.domain_table({"drive": "ok", "backup": "critical"})
+        joined = "\n".join(lines)
+        self.assertIn("CRIT", joined)
+        self.assertIn("backup", joined)
 
 
 if __name__ == "__main__":

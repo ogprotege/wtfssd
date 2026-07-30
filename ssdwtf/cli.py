@@ -7,15 +7,24 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from . import alerts, analyze, cleaners, history, optimize, report as report_mod
+from . import alerts, analyze, cleaners, history, metrics, optimize
+from . import report as report_mod
+from .collectors import apfs as apfs_col
+from .collectors import backup as backup_col
+from .collectors import crashes as crashes_col
 from .collectors import disk as disk_col
+from .collectors import pressure as pressure_col
 from .collectors import processes as proc_col
 from .collectors import smart as smart_col
+from .collectors import smartext as smartext_col
 from .collectors import statedirs as statedirs_col
 from .collectors import swap as swap_col
+from .collectors import system as system_col
+from .collectors import writerate as writerate_col
 from .collectors._run import run_cmd
 from .config import config_path, load_config
-from .models import HealthReport, report_to_dict
+from .models import (ApfsReport, BackupReport, CrashReport, HealthReport,
+                     StateDirReport, report_to_dict)
 
 
 def host_ram_gb() -> float:
@@ -28,7 +37,13 @@ def host_ram_gb() -> float:
         return 0.0
 
 
-def build_report(config: dict) -> HealthReport:
+def build_report(config: dict, fast: bool = False) -> HealthReport:
+    slow = set(config.get("tiers", {}).get("slow", []))
+
+    def want(name: str) -> bool:
+        return not (fast and name in slow)
+
+    crashes_cfg = config.get("crashes", {})
     return HealthReport(
         timestamp=datetime.now().isoformat(timespec="seconds"),
         host_ram_gb=host_ram_gb(),
@@ -36,7 +51,22 @@ def build_report(config: dict) -> HealthReport:
         swap=swap_col.collect_swap(),
         disk=disk_col.collect_disk(config["disk"]["mount"]),
         processes=proc_col.collect_processes(config["procs"]["ghost_days"]),
-        statedirs=statedirs_col.collect_statedirs(),
+        statedirs=(statedirs_col.collect_statedirs() if want("statedirs")
+                   else StateDirReport(note="not collected (--fast)")),
+        pressure=pressure_col.collect_pressure(),
+        system=system_col.collect_system(),
+        apfs=(apfs_col.collect_apfs(config["disk"]["mount"]) if want("apfs")
+              else ApfsReport(available=False, error="not collected (--fast)")),
+        backup=(backup_col.collect_backup()
+                if want("backup") and config.get("backup", {}).get("enabled", True)
+                else BackupReport(available=False, error="not collected (--fast)")),
+        crashes=(crashes_col.collect_crashes(crashes_cfg.get("apps", []))
+                 if want("crashes")
+                 else CrashReport(available=False, error="not collected (--fast)")),
+        writerate=writerate_col.collect_writerate(
+            config.get("writerate", {}).get("device", "disk0")),
+        external_smart=[smartext_col.collect_smart_external(d)
+                        for d in config["smart"].get("external_devices", [])],
     )
 
 
@@ -49,10 +79,12 @@ def _exit_code(findings: list) -> int:
     return 0
 
 
-def _run_scan(config: dict, use_history: bool) -> tuple[HealthReport, list, int]:
-    rep = build_report(config)
+def _run_scan(config: dict, use_history: bool,
+              fast: bool = False) -> tuple[HealthReport, list, int]:
+    rep = build_report(config, fast=fast)
     if use_history:
         history.append_history(rep)
+        metrics.record(rep)
     hist = history.load_history()
     findings = analyze.analyze(rep, hist, config)
     return rep, findings, _exit_code(findings)
@@ -62,7 +94,8 @@ def cmd_scan(args: argparse.Namespace) -> int:
     config, warn = load_config()
     if warn:
         print(f"warning: {warn}", file=sys.stderr)
-    rep, findings, code = _run_scan(config, use_history=not args.no_history)
+    rep, findings, code = _run_scan(config, use_history=not args.no_history,
+                                    fast=args.fast)
     if args.json:
         print(report_mod.render_json(rep, findings))
     else:
@@ -75,7 +108,8 @@ def cmd_watch(args: argparse.Namespace) -> int:
     if warn:
         print(f"warning: {warn}", file=sys.stderr)
     if args.once:
-        rep, findings, code = _run_scan(config, use_history=True)
+        rep, findings, code = _run_scan(config, use_history=True,
+                                        fast=args.fast)
         notified = alerts.alert(findings, config)
         for f in notified:
             print(f"notified: [{f.severity}] {f.title}")
@@ -86,7 +120,7 @@ def cmd_watch(args: argparse.Namespace) -> int:
     interval = args.interval or config["watch"]["interval_minutes"]
     print(f"ssdwtf watching every {interval} min — Ctrl-C to stop")
     while True:
-        rep, findings, _ = _run_scan(config, use_history=True)
+        rep, findings, _ = _run_scan(config, use_history=True, fast=args.fast)
         notified = alerts.alert(findings, config)
         print(f"[{rep.timestamp}] health "
               f"{analyze.health_score(findings)}/100 · "
@@ -205,12 +239,16 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("scan", help="full health report")
     p.add_argument("--json", action="store_true")
     p.add_argument("--no-history", action="store_true")
+    p.add_argument("--fast", action="store_true",
+                   help="fast tier only (skip slow collectors)")
     p.set_defaults(func=cmd_scan)
 
     p = sub.add_parser("watch", help="monitor + alert loop")
     p.add_argument("--once", action="store_true")
     p.add_argument("--interval", type=int, default=None,
                    help="minutes between passes (default: config)")
+    p.add_argument("--fast", action="store_true",
+                   help="fast tier only (skip slow collectors)")
     p.set_defaults(func=cmd_watch)
 
     p = sub.add_parser("clean", help="safe cleanup (dry-run by default)")
