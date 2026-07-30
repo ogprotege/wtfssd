@@ -56,5 +56,53 @@ class TestModels(unittest.TestCase):
         self.assertEqual(models.report_from_dict(d), rep)
 
 
+class TestPhase1Models(unittest.TestCase):
+    def test_new_reports_have_defaults(self):
+        rep = models.make_empty_report("2026-07-30T10:00:00", 64.0)
+        self.assertFalse(rep.pressure.available)
+        self.assertFalse(rep.system.available)
+        self.assertFalse(rep.apfs.available)
+        self.assertFalse(rep.backup.available)
+        self.assertFalse(rep.crashes.available)
+        self.assertFalse(rep.writerate.available)
+        self.assertEqual(rep.external_smart, [])
+
+    def test_finding_evidence_defaults_measured(self):
+        f = models.Finding(pillar="monitor", severity="info", code="x.y",
+                           title="t", detail="d", recommendation="r")
+        self.assertEqual(f.evidence, "measured")
+
+    def test_smart_new_fields_default_none(self):
+        s = models.SmartReport(available=True)
+        self.assertIsNone(s.critical_warning)
+        self.assertIsNone(s.spare_threshold)
+        self.assertIsNone(s.unsafe_shutdowns)
+        self.assertIsNone(s.temperature_c)
+
+    def test_roundtrip_with_new_fields(self):
+        rep = models.make_empty_report("2026-07-30T10:00:00", 64.0)
+        rep.pressure = models.PressureReport(available=True, level=1, free_pct=70.0)
+        rep.backup = models.BackupReport(available=True, configured=True,
+                                         destination_present=False,
+                                         last_backup_age_hours=None,
+                                         destinations=["TM Backup"])
+        d = models.report_to_dict(rep)
+        back = models.report_from_dict(d)
+        self.assertEqual(back.pressure.level, 1)
+        self.assertTrue(back.backup.configured)
+        self.assertEqual(back.backup.destinations, ["TM Backup"])
+
+    def test_from_dict_tolerates_old_rows(self):
+        # a v0.1.0 history row: no phase-1 keys at all
+        rep = models.make_empty_report("2026-07-29T10:00:00", 64.0)
+        d = models.report_to_dict(rep)
+        for k in ("pressure", "system", "apfs", "backup", "crashes",
+                  "writerate", "external_smart"):
+            d.pop(k, None)
+        back = models.report_from_dict(d)
+        self.assertFalse(back.pressure.available)
+        self.assertEqual(back.external_smart, [])
+
+
 if __name__ == "__main__":
     unittest.main()

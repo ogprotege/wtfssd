@@ -16,6 +16,10 @@ class SmartReport:
     power_on_hours: Optional[int] = None
     data_units_written: Optional[int] = None  # NVMe units of 512,000 bytes
     tb_written: Optional[float] = None
+    critical_warning: Optional[int] = None   # NVMe Critical Warning bitmask (0 = ok)
+    spare_threshold: Optional[int] = None    # device-reported Available Spare Threshold %
+    unsafe_shutdowns: Optional[int] = None
+    temperature_c: Optional[int] = None      # composite temperature
 
 
 @dataclass
@@ -69,6 +73,60 @@ class StateDirReport:
 
 
 @dataclass
+class PressureReport:
+    available: bool
+    error: Optional[str] = None
+    level: Optional[int] = None       # 1=normal, 2=warn, 4=critical (sysctl)
+    free_pct: Optional[float] = None  # memory_pressure fallback
+
+
+@dataclass
+class SystemReport:
+    available: bool
+    error: Optional[str] = None
+    uptime_days: Optional[float] = None
+    cpu_speed_limit: Optional[int] = None  # 100 = not throttled
+    battery_present: bool = False
+    battery_cycle_count: Optional[int] = None
+    battery_max_capacity_pct: Optional[int] = None
+
+
+@dataclass
+class ApfsReport:
+    available: bool
+    error: Optional[str] = None
+    snapshot_count: int = 0
+    oldest_snapshot_days: Optional[float] = None
+    container_free_gb: Optional[float] = None
+    volume_used_gb: Optional[float] = None
+
+
+@dataclass
+class BackupReport:
+    available: bool
+    error: Optional[str] = None
+    configured: bool = False
+    destination_present: bool = False
+    last_backup_age_hours: Optional[float] = None
+    destinations: list[str] = field(default_factory=list)
+
+
+@dataclass
+class CrashReport:
+    available: bool
+    error: Optional[str] = None
+    weekly: dict[str, int] = field(default_factory=dict)
+    total_weekly: int = 0
+
+
+@dataclass
+class WriteRateReport:
+    available: bool
+    error: Optional[str] = None
+    mb_per_s: Optional[float] = None
+
+
+@dataclass
 class Finding:
     pillar: str    # "monitor" | "clean" | "optimize"
     severity: str  # "info" | "warn" | "critical"
@@ -76,6 +134,7 @@ class Finding:
     title: str
     detail: str
     recommendation: str
+    evidence: str = "measured"  # measured|derived|correlated|inferred|reported|unavailable
 
 
 @dataclass
@@ -87,6 +146,13 @@ class HealthReport:
     disk: Optional[DiskReport]
     processes: ProcessReport
     statedirs: StateDirReport
+    pressure: PressureReport = field(default_factory=lambda: PressureReport(available=False))
+    system: SystemReport = field(default_factory=lambda: SystemReport(available=False))
+    apfs: ApfsReport = field(default_factory=lambda: ApfsReport(available=False))
+    backup: BackupReport = field(default_factory=lambda: BackupReport(available=False))
+    crashes: CrashReport = field(default_factory=lambda: CrashReport(available=False))
+    writerate: WriteRateReport = field(default_factory=lambda: WriteRateReport(available=False))
+    external_smart: list[SmartReport] = field(default_factory=list)
 
 
 def report_to_dict(report: HealthReport) -> dict[str, Any]:
@@ -94,7 +160,8 @@ def report_to_dict(report: HealthReport) -> dict[str, Any]:
 
 
 def report_from_dict(d: dict[str, Any]) -> HealthReport:
-    smart = SmartReport(**d["smart"])
+    smart = SmartReport(**{k: v for k, v in d["smart"].items()
+                           if k in SmartReport.__dataclass_fields__})
     swap = SwapReport(**d["swap"]) if d.get("swap") else None
     disk = DiskReport(**d["disk"]) if d.get("disk") else None
     procs = ProcessReport(
@@ -107,6 +174,17 @@ def report_from_dict(d: dict[str, Any]) -> HealthReport:
         total_bytes=d["statedirs"].get("total_bytes", 0),
         note=d["statedirs"].get("note"),
     )
+
+    def _sub(cls, key, default_available=False):
+        raw = d.get(key)
+        if not raw:
+            return cls(available=default_available)
+        return cls(**{k: v for k, v in raw.items()
+                      if k in cls.__dataclass_fields__})
+
+    external = [SmartReport(**{k: v for k, v in s.items()
+                               if k in SmartReport.__dataclass_fields__})
+                for s in d.get("external_smart", [])]
     return HealthReport(
         timestamp=d["timestamp"],
         host_ram_gb=d["host_ram_gb"],
@@ -115,6 +193,13 @@ def report_from_dict(d: dict[str, Any]) -> HealthReport:
         disk=disk,
         processes=procs,
         statedirs=statedirs,
+        pressure=_sub(PressureReport, "pressure"),
+        system=_sub(SystemReport, "system"),
+        apfs=_sub(ApfsReport, "apfs"),
+        backup=_sub(BackupReport, "backup"),
+        crashes=_sub(CrashReport, "crashes"),
+        writerate=_sub(WriteRateReport, "writerate"),
+        external_smart=external,
     )
 
 
