@@ -12,7 +12,7 @@ tests green, live-verified on macOS). The full package source under
 `ssdwtf/` is present and authoritative, alongside:
 
 - `pyproject.toml`, `README.md`, `LICENSE` — packaging, docs
-- `tests/` — the complete test suite (32 files, 190 tests)
+- `tests/` — the complete test suite (33 files, 210 tests)
   plus captured command-output fixtures in `tests/fixtures/`
 - `docs/superpowers/specs/2026-07-30-ssdwtf-design.md` — the design spec
 - `docs/superpowers/plans/2026-07-30-ssdwtf.md` — the implementation plan
@@ -41,7 +41,10 @@ Four pillars:
 - **Monitor** — SMART wear (`smartctl`), swap (`sysctl`), disk (`df`),
   processes (`ps`), agentic state dirs (`du`-style sizing)
 - **Alert** — threshold crossings via macOS Notification Center (`osascript`),
-  with per-finding cooldown
+  transition-based: a finding notifies when its code is new, its severity
+  escalated since the last notification, or its per-severity cooldown elapsed
+  (warn: `alerts.cooldown_hours` 24 h; critical:
+  `alerts.cooldown_critical_hours` 4 h); info findings never notify
 - **Clean** — dry-run-by-default cleanup of regenerable state (IDE caches,
   chat-DB backups, Xcode DerivedData, stale `node_modules`)
 - **Optimize** — `.cursorignore` generation, free-space floor tracking,
@@ -71,6 +74,7 @@ python3 -m ssdwtf clean cursor-caches --apply # actually clean (moves to Trash)
 python3 -m ssdwtf optimize ignore ~/my-project
 python3 -m ssdwtf watch --once
 python3 -m ssdwtf history
+python3 -m ssdwtf digest                      # one-look daily summary (--days N, --json)
 python3 -m ssdwtf config --show
 
 # Install the `ssdwtf` command into an isolated environment:
@@ -83,9 +87,9 @@ python3 -m unittest discover -s tests -v
 python3 -m unittest tests.test_config -v
 ```
 
-Exit codes for `scan` / `watch --once`: `0` no findings, `1` warnings only,
-`2` any critical finding, `3` internal error. `clean` exits `0`, or `3` on an
-unknown target.
+Exit codes for `scan` / `watch --once` / `digest`: `0` no findings,
+`1` warnings only, `2` any critical finding, `3` internal error. `clean`
+exits `0`, or `3` on an unknown target.
 
 ## Code organization
 
@@ -96,7 +100,7 @@ the package layout is:
 ssdwtf/
   __init__.py            # __version__
   __main__.py            # entry: from .cli import main; sys.exit(main())
-  cli.py                 # argparse: scan | clean | watch | optimize | history | config
+  cli.py                 # argparse: scan | clean | watch | optimize | history | digest | config
   models.py              # dataclasses shared across all modules (the contract)
   config.py              # load/merge ~/.config/ssdwtf/config.json over defaults
   collectors/
@@ -126,13 +130,18 @@ ssdwtf/
   analyze.py             # reports + config + history → list[Finding] + health score 0–100
   history.py             # JSONL scan history; trend / growth-rate analysis
   metrics.py             # sqlite metrics baseline (~/.local/share/ssdwtf/metrics.db)
-  alerts.py              # Finding → osascript notification; cooldown state file
+  alerts.py              # Finding → osascript notification; per-severity cooldowns
+                         # + escalation transitions; alert_state.json state file
   cleaners.py            # CleanupTarget registry + dry-run/apply engine
   optimize.py            # .cursorignore writer, LaunchAgent plist install/uninstall
+                         # (install-agent installs both: hourly full + 5-min fast-tier)
   report.py              # human tables and --json serialization
 tests/
   fixtures/              # captured outputs: smartctl.txt, sysctl_swap.txt, df.txt, ps.txt
   test_*.py              # one module per component (see Testing below)
+contrib/
+  swiftbar/ssdwtf.5m.py  # SwiftBar/xbar menu-bar plugin: SSD:<grade> title,
+                         # domains/findings dropdown; 5-min scan --fast, read-only
 ```
 
 Data flow: collectors → `models.HealthReport` → `analyze` → `[Finding]` +
@@ -173,8 +182,8 @@ These are contractual, from the implementation plan's global constraints:
 - Filesystem-touching tests (cleaners, optimize, history, config) run against
   `tempfile.TemporaryDirectory` and fakes; `cli` tests use `unittest.mock` to
   patch `build_report`, `analyze`, history, and config paths.
-- The suite is **190 tests, all passing** (verified after the Phase 2
-  monitor expansion).
+- The suite is **210 tests, all passing** (verified after the Phase 3
+  monitor expansion: alerts, digest, fast-tier agent, SwiftBar plugin).
 
 ## Configuration and runtime state
 
@@ -183,7 +192,8 @@ These are contractual, from the implementation plan's global constraints:
   (path: `ssdwtf config --path`). Useful keys: `swap.warn_gb`, `swap.crit_gb`,
   `disk.warn_free_pct`, `procs.ghost_days`, `state.vscdb_warn_gb`,
   `smart.device`, `smart.external_devices`, `alerts.cooldown_hours`,
-  `watch.interval_minutes`, `projects` (dirs scanned for stale
+  `alerts.cooldown_critical_hours`, `watch.interval_minutes`,
+  `watch.fast_interval_minutes`, `projects` (dirs scanned for stale
   `node_modules`), `tiers.fast`/`tiers.slow` (collector split behind
   `scan --fast`; fast adds `retention`/`launchd`/`spotlight`/`mcp`, slow
   carries `statedirs`/`apfs`/`backup`/`crashes`/`churn`/`fds`/`secrets`/
@@ -199,7 +209,8 @@ These are contractual, from the implementation plan's global constraints:
 - Runtime state (the only writes monitoring makes):
   `~/.local/share/ssdwtf/` — `history.jsonl`, `metrics.db`,
   `alert_state.json`, `churn_state.json`, `launchd_baseline.json`,
-  `backups/`. Both exist on the development machine.
+  `watch.log` / `watch-fast.log` (LaunchAgent stdout/stderr), `backups/`.
+  Both exist on the development machine.
 
 ## Safety model (security considerations)
 

@@ -62,15 +62,37 @@ ssdwtf clean             # dry-run: lists what *would* be cleaned, deletes nothi
 ssdwtf clean cursor-caches --apply   # actually clean (moves to Trash)
 ssdwtf optimize ignore ~/my-project  # write/merge .cursorignore churn rules
 ssdwtf optimize headroom             # free-space floor status + top consumers
-ssdwtf optimize install-agent        # hourly background monitoring (LaunchAgent)
+ssdwtf optimize install-agent        # background monitoring: two LaunchAgents,
+                                     # hourly full watch + 5-min fast-tier watch
 ssdwtf watch --once      # single monitor pass + Notification Center alerts
 ssdwtf history           # trend table built from past scans
+ssdwtf digest            # one-look daily summary: domain statuses, key deltas
+                         # (TB written, swap, state, logs, backup age), findings
+ssdwtf digest --json     # same, machine-readable (--days N widens the window)
 ssdwtf config --show     # effective config (defaults + your overrides)
 ```
 
-Exit codes for `scan` / `watch --once`: `0` no findings, `1` warnings only,
-`2` any critical finding, `3` internal error. `clean` exits `0`, or `3` on an
-unknown target.
+Exit codes for `scan` / `watch --once` / `digest`: `0` no findings,
+`1` warnings only, `2` any critical finding, `3` internal error. `clean`
+exits `0`, or `3` on an unknown target.
+
+## Menu bar (SwiftBar)
+
+`contrib/swiftbar/ssdwtf.5m.py` is a SwiftBar/xbar plugin that puts the
+health grade in the menu bar — `SSD:A`, colored green/yellow/red by the
+worst current finding (gray when unknown). The dropdown carries the score,
+all ten domains, the top findings, and actions to run a full scan in
+Terminal or refresh. It re-renders every 5 minutes from
+`ssdwtf scan --fast --json --no-history`; everything it does is read-only.
+
+```sh
+brew install --cask swiftbar
+ln -s "$(pwd)/contrib/swiftbar/ssdwtf.5m.py" "$HOME/Library/Application Support/SwiftBar/Plugins/"
+```
+
+The plugin prefers an installed `ssdwtf` command; from a source checkout it
+falls back to `python3 -m ssdwtf` with the repo root as working directory,
+so keep the symlink pointing at the checkout.
 
 ## Safety model
 
@@ -109,8 +131,10 @@ Example — alert on swap earlier than the 8 GB default:
 Other useful keys: `disk.warn_free_pct`, `procs.ghost_days`,
 `procs.leak_warn_mb_h` / `procs.leak_window_h` (RSS leak-slope alert),
 `state.vscdb_warn_gb`, `smart.device`, `smart.external_devices` (extra drives
-to probe, e.g. `["/dev/disk2"]`), `alerts.cooldown_hours`,
-`watch.interval_minutes`, `projects` (directories scanned for stale
+to probe, e.g. `["/dev/disk2"]`), `alerts.cooldown_hours` /
+`alerts.cooldown_critical_hours` (per-severity re-notify intervals, 24 h / 4 h),
+`watch.interval_minutes` / `watch.fast_interval_minutes` (hourly full agent /
+5-minute fast-tier agent), `projects` (directories scanned for stale
 `node_modules`), `tiers.fast` / `tiers.slow` (which collectors `--fast` keeps
 and skips), `backup.enabled` / `backup.warn_hours` / `backup.crit_hours`
 (Time Machine freshness), `apfs.snapshot_warn_days`,
@@ -149,15 +173,24 @@ full merged picture.
   findings: drive, backup, headroom, memory, processes, state, stability,
   telemetry, privacy, work (`ok` / `warn` / `critical`, or `unknown` when a
   domain's collectors returned no data — absence of data is never reported
-  as `ok`).
+  as `ok`). Memory-pressure warnings fire only when elevated pressure is
+  *sustained* — a majority of samples over `pressure.sustained_min`
+  minutes — so a momentary spike doesn't alert; level-4 critical pressure
+  always fires immediately.
 - `ssdwtf/history.py` — JSONL scan history for trend and growth-rate analysis.
 - `ssdwtf/metrics.py` — sqlite baseline store
   (`~/.local/share/ssdwtf/metrics.db`); every scan/watch pass records its
   metrics there alongside the JSONL history.
-- `ssdwtf/alerts.py` — Notification Center via `osascript`, with per-finding
-  cooldown so it doesn't nag.
+- `ssdwtf/alerts.py` — Notification Center via `osascript`, transition-based
+  so it doesn't nag: a finding notifies when it's new, when its severity
+  escalates since the last notification (a warn→critical jump notifies
+  immediately, even inside the warn cooldown), or when its per-severity
+  cooldown elapses — warn findings re-notify at most every
+  `alerts.cooldown_hours` (24 h), critical ones every
+  `alerts.cooldown_critical_hours` (4 h). Info findings never notify.
 - `ssdwtf/cleaners.py` — guarded, dry-run-first cleanup targets.
-- `ssdwtf/optimize.py` — `.cursorignore` merging and the LaunchAgent.
+- `ssdwtf/optimize.py` — `.cursorignore` merging and the LaunchAgents
+  (hourly full watch plus a 5-minute fast-tier watcher).
 - `ssdwtf/cli.py` — the `ssdwtf` command.
 
 ## Tests

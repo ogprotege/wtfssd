@@ -118,6 +118,23 @@ class TestCli(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("warn_gb", buf.getvalue())
 
+    def test_digest_json_smoke(self):
+        buf = io.StringIO()
+        with mock.patch.object(cli, "_run_scan",
+                               return_value=(fake_report(), [], 0)), \
+             mock.patch.object(cli.metrics, "series", return_value=[]), \
+             mock.patch.object(cli.metrics, "rate_per_day",
+                               return_value=None), \
+             mock.patch.object(cli.history, "load_history",
+                               return_value=[]), \
+             mock.patch.object(cli.history, "gb_written_per_day",
+                               return_value=None), \
+             redirect_stdout(buf):
+            code = cli.main(["digest", "--json"])
+        self.assertEqual(code, 0)
+        data = json.loads(buf.getvalue())
+        self.assertIn("stats", data)
+
 
 if __name__ == "__main__":
     unittest.main()

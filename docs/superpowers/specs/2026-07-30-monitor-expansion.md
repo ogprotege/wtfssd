@@ -312,3 +312,67 @@ slow += churn, fds, secrets, logs, gitwatch.
 `procs.rss.<pid>` (per IDE process, feeds slopes), `churn.turnover`,
 `fds.max_count`, `mcp.live_servers`, `logs.total_gb`,
 `spotlight.mds_cpu_pct`. Dynamic per-PID metric names are intentional.
+
+---
+
+## 11. Phase 3 detail (menu bar + real-time alerts)
+
+Phase 3 turns the monitor into the always-on tool: menu-bar presence,
+transition-based alerting, sustained-pressure detection, daily digest, and a
+fast-tier poller agent.
+
+### 11.1 Alert semantics (alerts.py)
+
+- **Per-severity cooldowns**: `alerts.cooldown_hours` (24, warn) and new
+  `alerts.cooldown_critical_hours` (4). Info findings never notify (unchanged).
+- **Transitions**: a finding notifies when (a) its code is new, (b) its
+  severity increased since the last notification for that code, or (c) its
+  per-severity cooldown elapsed. State file `alert_state.json` migrates from
+  `{code: iso_ts}` to `{code: {"ts": iso, "severity": sev}}`; old format
+  entries are read as warn-severity timestamps (back-compatible).
+
+### 11.2 Sustained pressure + thrash window (analyze.py)
+
+- `pressure.warn` fires only when pressure level ≥ 2 is **sustained**:
+  majority of `pressure.level` samples over `pressure.sustained_min` (10)
+  are ≥ 2, using the metrics store; when metrics are unavailable (no path or
+  < 2 samples) it falls back to the current point-in-time behavior.
+  `pressure.critical` (level 4) always fires immediately.
+- `_swap_rate_gb_day` gains the same 14-day window cap as state growth
+  (`window_days: float = 14.0` parameter).
+
+### 11.3 Digest (cli + report)
+
+- `ssdwtf digest [--days N] [--json]` — one-look daily summary from
+  metrics + history: all-time scan count, per-domain current status, key
+  deltas (TB written, latest swap, state GB, logs GB, backup age), and the
+  current findings count by severity. Performs (and records) a fresh scan
+  first, exactly as `scan` does.
+
+### 11.4 Fast-tier poller agent (optimize.py)
+
+- `install_fast_agent()` writes a second LaunchAgent
+  `com.ssdwtf.watch.fast.plist` running `watch --once --fast` every
+  `watch.fast_interval_minutes` (5, new config key; StartInterval seconds).
+  `optimize install-agent` now installs both agents and prints both results;
+  `uninstall-agent` removes both. `install_agent()` signature unchanged.
+
+### 11.5 Menu-bar plugin (contrib/swiftbar/ssdwtf.5m.py)
+
+- SwiftBar/xbar-compatible plugin, stdlib Python 3, executable. Runs
+  `ssdwtf scan --fast --json --no-history` (resolves the package by trying
+  the `ssdwtf` console script, then `python3 -m ssdwtf` with cwd = repo root
+  derived from the plugin's real path). Test hook: `SSDWTF_JSON` env var
+  bypasses the subprocess with a canned payload.
+- Menu bar title: `SSD:<grade>` colored by worst severity (green/yellow/red/
+  gray for unknown). Dropdown: score, ten domains with status markers,
+  top 5 findings, action rows (Run full scan in Terminal, Refresh). All
+  actions read-only or Terminal-opening; no silent mutation.
+- Install (documented in README): symlink into the SwiftBar plugins dir.
+
+### 11.6 Config additions
+
+```json
+"alerts": {"cooldown_critical_hours": 4},
+"watch":  {"fast_interval_minutes": 5}
+```

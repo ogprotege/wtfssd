@@ -235,10 +235,18 @@ def cmd_optimize(args: argparse.Namespace) -> int:
         print(f"wrote {path}")
         print("loaded with launchctl" if loaded else
               f"not loaded — run: launchctl bootstrap gui/$(id -u) {path}")
+        config, _ = load_config()
+        interval = int(config.get("watch", {}).get("fast_interval_minutes", 5)) * 60
+        fpath, floaded = optimize.install_fast_agent(interval_seconds=interval)
+        print(f"wrote {fpath} (fast tier, every {interval // 60} min)")
+        print("loaded with launchctl" if floaded else
+              f"not loaded — run: launchctl bootstrap gui/$(id -u) {fpath}")
         return 0
     if args.opt_command == "uninstall-agent":
         removed = optimize.uninstall_agent()
-        print("agent removed" if removed else "no agent installed")
+        fast_removed = optimize.uninstall_agent(label="com.ssdwtf.watch.fast")
+        n = int(removed) + int(fast_removed)
+        print(f"{n} agent(s) removed" if n else "no agent installed")
         return 0
     return 3
 
@@ -250,6 +258,39 @@ def cmd_history(args: argparse.Namespace) -> int:
     else:
         print(report_mod.render_history(entries))
     return 0
+
+
+def cmd_digest(args: argparse.Namespace) -> int:
+    config, warn = load_config()
+    if warn:
+        print(f"warning: {warn}", file=sys.stderr)
+    rep, findings, code = _run_scan(config, use_history=True,
+                                    fast=getattr(args, "fast", False))
+    days = args.days
+    stats = {
+        "days": days,
+        "scans": len(history.load_history(limit=None)),
+        "domains": analyze.domain_statuses(findings, rep),
+        "tb_written_delta": None,
+        "gb_written_per_day": history.gb_written_per_day(
+            history.load_history()),
+        "swap_used_gb": rep.swap.used_mb / 1024 if rep.swap else None,
+        "state_total_gb": (rep.statedirs.total_bytes / 1e9
+                           if rep.statedirs.dirs else None),
+        "logs_gb_per_day": metrics.rate_per_day("logs.total_gb", days=days),
+        "backup_age_hours": (rep.backup.last_backup_age_hours
+                             if rep.backup.available else None),
+    }
+    series = metrics.series("smart.tb_written", days=days)
+    if len(series) >= 2:
+        stats["tb_written_delta"] = series[-1][1] - series[0][1]
+    if args.json:
+        print(json.dumps({"stats": stats, "findings": [
+            {"severity": f.severity, "code": f.code, "title": f.title}
+            for f in findings]}, indent=2, default=str))
+    else:
+        print(report_mod.render_digest(rep, findings, stats))
+    return code
 
 
 def cmd_config(args: argparse.Namespace) -> int:
@@ -310,6 +351,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--last", type=int, default=None)
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_history)
+
+    p = sub.add_parser("digest", help="one-look daily summary")
+    p.add_argument("--days", type=int, default=1)
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_digest)
 
     p = sub.add_parser("config", help="show effective config")
     p.add_argument("--show", action="store_true")
