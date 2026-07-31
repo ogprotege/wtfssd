@@ -2114,3 +2114,12 @@ disabled by default is ok), `work` shows unknown when `git.repos` is empty
   a locked DB degrades silently by design.
 - gitwatch never fetches: unpushed counts use local refs only, so a stale
   remote ref means the count is a lower bound — documented behavior.
+
+## As-Built Deviations (recorded at Task 15)
+
+- Task 13: `test_procs_leak_with_metrics` was rewritten with now-relative
+  timestamps and a corrected slope series — the plan's original listing was
+  time-bombed (fixed dates) and its series stayed below the leak threshold.
+- Task 14: the extended `--fast` test body uses `contextlib.ExitStack`
+  instead of 25 nested `with` blocks (CPython's 20-block limit for nested
+  blocks in a single statement).

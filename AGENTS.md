@@ -12,7 +12,7 @@ tests green, live-verified on macOS). The full package source under
 `ssdwtf/` is present and authoritative, alongside:
 
 - `pyproject.toml`, `README.md`, `LICENSE` — packaging, docs
-- `tests/` — the complete test suite (23 files, 141 tests)
+- `tests/` — the complete test suite (32 files, 190 tests)
   plus captured command-output fixtures in `tests/fixtures/`
 - `docs/superpowers/specs/2026-07-30-ssdwtf-design.md` — the design spec
 - `docs/superpowers/plans/2026-07-30-ssdwtf.md` — the implementation plan
@@ -105,8 +105,8 @@ ssdwtf/
     smart.py             # smartctl -a /dev/disk0 → SmartReport
     swap.py              # sysctl vm.swapusage → SwapReport
     disk.py              # df -k /System/Volumes/Data → DiskReport
-    processes.py         # ps → ghost IDE helpers → ProcessReport
-    statedirs.py         # known state dirs, state.vscdb sizes → StateDirReport
+    processes.py         # ps → ghost IDE helpers + per-IDE RSS feed → ProcessReport
+    statedirs.py         # 18 known state dirs (categorized, double-count-guarded), state.vscdb sizes → StateDirReport
     pressure.py          # memory pressure: sysctl level + memory_pressure free-% → PressureReport
     system.py            # uptime (kern.boottime), pmset throttle, ioreg battery → SystemReport
     apfs.py              # tmutil local snapshots + diskutil container free → ApfsReport
@@ -114,6 +114,15 @@ ssdwtf/
     crashes.py           # DiagnosticReports per watched app, trailing 7 days → CrashReport
     writerate.py         # iostat -d current-interval MB/s → WriteRateReport
     smartext.py          # SMART for external drives, bridge protocols in order → SmartReport
+    churn.py             # .pack snapshot create/destroy turnover vs stored baseline → ChurnReport
+    fds.py               # lsof -nP per-PID open-fd counts → FdsReport
+    mcp.py               # claude_desktop_config.json MCP fleet + pgrep liveness → MCPReport
+    secrets.py           # OPT-IN key/token scan; paths/lines/rules only, never values → SecretsReport
+    retention.py         # retention-config audit (cleanupPeriodDays etc.) → RetentionReport
+    launchd.py           # LaunchAgent/Daemon additions vs stored baseline → LaunchdReport
+    spotlight.py         # mds/mdworker CPU + mdutil indexing state → SpotlightReport
+    logs.py              # ~/Library/Logs sizing + growth leaders → LogsReport
+    gitwatch.py          # read-only git status across configured repos → GitWatchReport
   analyze.py             # reports + config + history → list[Finding] + health score 0–100
   history.py             # JSONL scan history; trend / growth-rate analysis
   metrics.py             # sqlite metrics baseline (~/.local/share/ssdwtf/metrics.db)
@@ -164,7 +173,7 @@ These are contractual, from the implementation plan's global constraints:
 - Filesystem-touching tests (cleaners, optimize, history, config) run against
   `tempfile.TemporaryDirectory` and fakes; `cli` tests use `unittest.mock` to
   patch `build_report`, `analyze`, history, and config paths.
-- The suite is **141 tests, all passing** (verified after the Phase 1
+- The suite is **190 tests, all passing** (verified after the Phase 2
   monitor expansion).
 
 ## Configuration and runtime state
@@ -176,13 +185,21 @@ These are contractual, from the implementation plan's global constraints:
   `smart.device`, `smart.external_devices`, `alerts.cooldown_hours`,
   `watch.interval_minutes`, `projects` (dirs scanned for stale
   `node_modules`), `tiers.fast`/`tiers.slow` (collector split behind
-  `scan --fast`), `backup.enabled`/`backup.warn_hours`/`backup.crit_hours`,
+  `scan --fast`; fast adds `retention`/`launchd`/`spotlight`/`mcp`, slow
+  carries `statedirs`/`apfs`/`backup`/`crashes`/`churn`/`fds`/`secrets`/
+  `logs`/`gitwatch`), `backup.enabled`/`backup.warn_hours`/`backup.crit_hours`,
   `apfs.snapshot_warn_days`, `pressure.sustained_min`,
   `crashes.warn_weekly`/`crashes.apps`, `thermal.warn_below`,
-  `uptime.warn_days`, `writerate.warn_mb_s`, `battery.capacity_info_pct`.
+  `uptime.warn_days`, `writerate.warn_mb_s`, `battery.capacity_info_pct`,
+  `procs.leak_warn_mb_h`/`procs.leak_window_h`,
+  `churn.warn_turnover`/`churn.warn_gb`, `fds.warn_count`, `mcp.config_path`,
+  `secrets.enabled` (opt-in, defaults off — scanner never records values),
+  `spotlight.warn_cpu_pct`, `logs.warn_gb_day`/`logs.extra_dirs`,
+  `git.repos`/`git.warn_changes`/`git.warn_unpushed`.
 - Runtime state (the only writes monitoring makes):
   `~/.local/share/ssdwtf/` — `history.jsonl`, `metrics.db`,
-  `alert_state.json`, `backups/`. Both exist on the development machine.
+  `alert_state.json`, `churn_state.json`, `launchd_baseline.json`,
+  `backups/`. Both exist on the development machine.
 
 ## Safety model (security considerations)
 
@@ -201,6 +218,9 @@ them in any change to `cleaners.py`:
   touched.
 - **Read-only monitoring.** `scan`, `watch`, `history`, and `config` only
   read the system.
+- **Secrets scanner is opt-in.** `secrets.enabled` defaults to `false`; even
+  when enabled it records only file paths, line numbers, and rule names —
+  never the matched values.
 - Never run external commands with `shell=True`; never require `sudo`
   (smartctl works without it on the target platform).
 
