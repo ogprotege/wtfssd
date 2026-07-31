@@ -137,6 +137,20 @@ class TestAlerts(unittest.TestCase):
                                notifier=lambda f: True)
             self.assertEqual(got, [])  # legacy ts honored as cooldown
 
+    def test_corrupt_state_entry_tolerated(self):
+        # non-string ts (TypeError) + unknown severity (not in rank):
+        # must not raise, and the finding notifies normally
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "alert_state.json").write_text(
+                json.dumps({"a.b": {"ts": 123, "severity": "weird"}}))
+            sent = []
+            got = alerts.alert([finding("warn", "a.b")], CONFIG,
+                               state_dir=Path(td),
+                               notifier=lambda f: sent.append(f.code) or True,
+                               now=NOW)
+            self.assertEqual(sent, ["a.b"])
+            self.assertEqual([f.code for f in got], ["a.b"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -89,9 +89,9 @@ def alert(findings: list[Finding], config: dict,
         if last:
             try:
                 elapsed = now - datetime.fromisoformat(last["ts"])
-            except ValueError:
+            except (ValueError, TypeError):
                 elapsed = None
-            same_or_lower = rank[last["severity"]] >= rank[f.severity]
+            same_or_lower = rank.get(last["severity"], 1) >= rank[f.severity]
             if (same_or_lower and elapsed is not None
                     and elapsed < cooldowns[f.severity]):
                 continue  # still inside the cooldown for a non-escalation

@@ -344,9 +344,10 @@ fast-tier poller agent.
 ### 11.3 Digest (cli + report)
 
 - `ssdwtf digest [--days N] [--json]` — one-look daily summary from
-  metrics + history: period scan count, per-domain current status, key
-  deltas (TB written, swap max, state GB, logs GB, backup age), and the
-  current findings count by severity. Read-only.
+  metrics + history: all-time scan count, per-domain current status, key
+  deltas (TB written, latest swap, state GB, logs GB, backup age), and the
+  current findings count by severity. Performs (and records) a fresh scan
+  first, exactly as `scan` does.
 
 ### 11.4 Fast-tier poller agent (optimize.py)
 
@@ -365,8 +366,8 @@ fast-tier poller agent.
   bypasses the subprocess with a canned payload.
 - Menu bar title: `SSD:<grade>` colored by worst severity (green/yellow/red/
   gray for unknown). Dropdown: score, ten domains with status markers,
-  top 5 findings, action rows (Run full scan in Terminal, Open config,
-  Refresh). All actions read-only or Terminal-opening; no silent mutation.
+  top 5 findings, action rows (Run full scan in Terminal, Refresh). All
+  actions read-only or Terminal-opening; no silent mutation.
 - Install (documented in README): symlink into the SwiftBar plugins dir.
 
 ### 11.6 Config additions
