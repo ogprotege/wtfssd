@@ -9,8 +9,8 @@ from ..models import LaunchdReport
 
 _SYSTEM_DIRS = (Path("/Library/LaunchAgents"), Path("/Library/LaunchDaemons"))
 # The tool's own LaunchAgents (installed by `optimize install-agent`) must
-# never be reported as new — ssdwtf does not alert on itself.
-_SELF_PREFIX = "com.ssdwtf."
+# never be reported as new — wtfssd does not alert on itself.
+_SELF_PREFIX = "com.wtfssd."
 
 
 def collect_launchd(home: Optional[Path] = None,

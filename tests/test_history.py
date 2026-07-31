@@ -5,8 +5,8 @@ import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from ssdwtf import models
-from ssdwtf import history
+from wtfssd import models
+from wtfssd import history
 
 
 def make_report(ts: str, units: int | None, state_bytes: int,

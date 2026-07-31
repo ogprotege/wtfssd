@@ -4,7 +4,7 @@ import datetime as dt
 import unittest
 from pathlib import Path
 
-from ssdwtf.collectors import backup
+from wtfssd.collectors import backup
 
 FIX = Path(__file__).parent / "fixtures"
 NOW = dt.datetime(2026, 7, 30, 12, 0, 0).timestamp()

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import unittest
 
-from ssdwtf import models, report
+from wtfssd import models, report
 
 
 def sample() -> tuple[models.HealthReport, list[models.Finding]]:

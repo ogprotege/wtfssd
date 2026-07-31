@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 
 PLUGIN = (Path(__file__).parent.parent / "contrib" / "swiftbar"
-          / "ssdwtf.5m.py")
+          / "wtfssd.5m.py")
 
 PAYLOAD = {
     "score": 68, "grade": "C",
@@ -25,7 +25,7 @@ PAYLOAD = {
 
 class TestSwiftBar(unittest.TestCase):
     def _run(self, payload=PAYLOAD):
-        env = dict(os.environ, SSDWTF_JSON=json.dumps(payload))
+        env = dict(os.environ, WTFSSD_JSON=json.dumps(payload))
         return subprocess.run([sys.executable, str(PLUGIN)],
                               capture_output=True, text=True, env=env,
                               timeout=30)
@@ -44,7 +44,7 @@ class TestSwiftBar(unittest.TestCase):
         self.assertTrue(out.startswith("SSD:A | color=green"))
 
     def test_bad_payload_degrades_to_gray(self):
-        env = dict(os.environ, SSDWTF_JSON="{not json")
+        env = dict(os.environ, WTFSSD_JSON="{not json")
         out = subprocess.run([sys.executable, str(PLUGIN)],
                              capture_output=True, text=True, env=env,
                              timeout=30)
@@ -52,7 +52,7 @@ class TestSwiftBar(unittest.TestCase):
         self.assertTrue(out.stdout.startswith("SSD:? | color=gray"))
 
     def test_nondict_payload_degrades_to_gray(self):
-        env = dict(os.environ, SSDWTF_JSON="[1,2]")
+        env = dict(os.environ, WTFSSD_JSON="[1,2]")
         out = subprocess.run([sys.executable, str(PLUGIN)],
                              capture_output=True, text=True, env=env,
                              timeout=30)
@@ -69,9 +69,9 @@ class TestSwiftBar(unittest.TestCase):
         self.assertIn("[CRITICAL] Last successful backup 9 days ago",
                       out.stdout)
 
-    def test_scan_action_falls_back_without_ssdwtf_on_path(self):
+    def test_scan_action_falls_back_without_wtfssd_on_path(self):
         with tempfile.TemporaryDirectory() as empty_path:
-            env = dict(os.environ, SSDWTF_JSON=json.dumps(PAYLOAD),
+            env = dict(os.environ, WTFSSD_JSON=json.dumps(PAYLOAD),
                        PATH=empty_path)
             out = subprocess.run([sys.executable, str(PLUGIN)],
                                  capture_output=True, text=True, env=env,
@@ -79,21 +79,21 @@ class TestSwiftBar(unittest.TestCase):
         self.assertEqual(out.returncode, 0)
         line = next(l for l in out.stdout.splitlines()
                     if "Run full scan" in l)
-        self.assertNotIn("bash=ssdwtf ", line)
+        self.assertNotIn("bash=wtfssd ", line)
         self.assertIn("terminal=true", line)
 
-    def test_scan_action_prefers_installed_ssdwtf(self):
+    def test_scan_action_prefers_installed_wtfssd(self):
         with tempfile.TemporaryDirectory() as bin_dir:
-            fake = Path(bin_dir) / "ssdwtf"
+            fake = Path(bin_dir) / "wtfssd"
             fake.write_text("#!/bin/sh\nexit 0\n")
             fake.chmod(0o755)
-            env = dict(os.environ, SSDWTF_JSON=json.dumps(PAYLOAD),
+            env = dict(os.environ, WTFSSD_JSON=json.dumps(PAYLOAD),
                        PATH=bin_dir)
             out = subprocess.run([sys.executable, str(PLUGIN)],
                                  capture_output=True, text=True, env=env,
                                  timeout=30)
         self.assertIn(
-            "Run full scan | bash=ssdwtf param1=scan terminal=true",
+            "Run full scan | bash=wtfssd param1=scan terminal=true",
             out.stdout)
 
 

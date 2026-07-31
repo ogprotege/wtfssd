@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssdwtf.collectors import secrets
+from wtfssd.collectors import secrets
 
 
 class TestSecrets(unittest.TestCase):

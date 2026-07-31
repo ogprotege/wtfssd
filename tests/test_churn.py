@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssdwtf.collectors import churn
+from wtfssd.collectors import churn
 
 
 def _mk(home: Path, rel: str, size: int) -> None:

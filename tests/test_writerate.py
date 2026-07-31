@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from ssdwtf.collectors import writerate
+from wtfssd.collectors import writerate
 
 FIX = Path(__file__).parent / "fixtures"
 

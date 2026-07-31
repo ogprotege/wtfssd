@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssdwtf import optimize
+from wtfssd import optimize
 
 
 class TestIgnoreMerge(unittest.TestCase):
@@ -40,7 +40,7 @@ class TestAgent(unittest.TestCase):
             path, loaded = optimize.install_agent(launch_agents_dir=la)
             self.assertTrue(path.exists())
             text = path.read_text()
-            self.assertIn("com.ssdwtf.watch", text)
+            self.assertIn("com.wtfssd.watch", text)
             self.assertIn("<key>StartInterval</key>", text)
             self.assertIn("<integer>3600</integer>", text)
             self.assertIn("watch", text)
@@ -61,7 +61,7 @@ class TestAgent(unittest.TestCase):
                 launch_agents_dir=Path(td))
             self.assertFalse(loaded)  # tempdir: launchctl untouched
             text = path.read_text()
-            self.assertIn("com.ssdwtf.watch.fast", text)
+            self.assertIn("com.wtfssd.watch.fast", text)
             self.assertIn("--fast", text)
             self.assertIn("<integer>300</integer>", text)
 
@@ -71,7 +71,7 @@ class TestAgent(unittest.TestCase):
             optimize.install_fast_agent(launch_agents_dir=Path(td))
             self.assertTrue(optimize.uninstall_agent(launch_agents_dir=Path(td)))
             self.assertTrue(optimize.uninstall_agent(
-                label="com.ssdwtf.watch.fast", launch_agents_dir=Path(td)))
+                label="com.wtfssd.watch.fast", launch_agents_dir=Path(td)))
 
 
 if __name__ == "__main__":

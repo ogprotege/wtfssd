@@ -18,7 +18,7 @@ def _escape(text: str) -> str:
 
 def _osascript_notify(finding: Finding, runner: Callable = run_cmd) -> bool:
     detail = _escape(finding.detail[:200])
-    title = _escape(f"ssdwtf: {finding.title[:80]}")
+    title = _escape(f"wtfssd: {finding.title[:80]}")
     script = (f'display notification "{detail}" with title "{title}" '
               f'sound name "Glass"')
     # osascript exits 0 and prints nothing even when the notification fails,

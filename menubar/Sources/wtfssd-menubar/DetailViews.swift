@@ -237,7 +237,7 @@ struct SettingsView: View {
                 .onChange(of: launchAtLogin) { SMAppServiceState.apply($0) }
                 .padding(.vertical, 4)
 
-            Text("thresholds & tiers live in ~/.config/ssdwtf/config.json")
+            Text("thresholds & tiers live in ~/.config/wtfssd/config.json")
                 .font(.system(size: 9))
                 .foregroundStyle(.secondary)
                 .padding(.top, 6)

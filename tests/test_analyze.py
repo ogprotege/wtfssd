@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from ssdwtf import analyze, models
-from ssdwtf.config import DEFAULTS
+from wtfssd import analyze, models
+from wtfssd.config import DEFAULTS
 
 
 def base_report() -> models.HealthReport:
@@ -327,7 +327,7 @@ class TestPhase2Findings(unittest.TestCase):
         import tempfile
         from datetime import datetime, timedelta
         from pathlib import Path as P
-        from ssdwtf import metrics as metrics_mod
+        from wtfssd import metrics as metrics_mod
         rep = _base_report()
         rep.processes = models.ProcessReport(ide_procs=[
             models.GhostProcess(pid=42, ppid=1, name="Cursor Helper",
@@ -366,7 +366,7 @@ class TestPhase3Pressure(unittest.TestCase):
     def test_pressure_warn_suppressed_when_not_sustained(self):
         import tempfile
         from pathlib import Path as P
-        from ssdwtf import metrics as metrics_mod
+        from wtfssd import metrics as metrics_mod
         rep = _base_report()
         rep.pressure = models.PressureReport(available=True, level=2)
         with tempfile.TemporaryDirectory() as td:
@@ -386,7 +386,7 @@ class TestPhase3Pressure(unittest.TestCase):
     def test_pressure_warn_fires_when_sustained(self):
         import tempfile
         from pathlib import Path as P
-        from ssdwtf import metrics as metrics_mod
+        from wtfssd import metrics as metrics_mod
         rep = _base_report()
         rep.pressure = models.PressureReport(available=True, level=2)
         with tempfile.TemporaryDirectory() as td:

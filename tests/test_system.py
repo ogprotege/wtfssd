@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from ssdwtf.collectors import system
+from wtfssd.collectors import system
 
 FIX = Path(__file__).parent / "fixtures"
 # boottime fixture: Mon Jul 27 18:30:50 2026 → epoch 1785191450

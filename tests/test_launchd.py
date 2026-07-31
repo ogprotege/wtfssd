@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssdwtf.collectors import launchd
+from wtfssd.collectors import launchd
 
 
 def _mk(d: Path, name: str) -> None:
@@ -52,14 +52,14 @@ class TestLaunchd(unittest.TestCase):
             self.assertEqual(rep.agent_count, 1)
 
     def test_own_agents_excluded(self):
-        # ssdwtf never alerts on its own LaunchAgents: they are not counted,
+        # wtfssd never alerts on its own LaunchAgents: they are not counted,
         # never reported as new, and never stored in the baseline.
         with tempfile.TemporaryDirectory() as td:
             home = Path(td)
             agents = home / "Library/LaunchAgents"
             _mk(agents, "com.a.plist")
-            _mk(agents, "com.ssdwtf.watch.plist")
-            _mk(agents, "com.ssdwtf.watch.fast.plist")
+            _mk(agents, "com.wtfssd.watch.plist")
+            _mk(agents, "com.wtfssd.watch.fast.plist")
             state = home / "b.json"
             rep = launchd.collect_launchd(home=home, state_path=state,
                                           system_dirs=())

@@ -1,4 +1,4 @@
-// main.swift — native menu bar monitor for ssdwtf (SwiftUI popover).
+// main.swift — native menu bar monitor for wtfssd (SwiftUI popover).
 //
 // Owns nothing, deletes nothing: every action is a read-only scan or opens
 // Terminal for the user. Debug: `wtfssd-menubar --dump-menu` prints the
@@ -123,10 +123,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         switch cmd {
         case "config-open":
             NSWorkspace.shared.open(URL(fileURLWithPath:
-                "\(NSHomeDirectory())/.config/ssdwtf/config.json"))
+                "\(NSHomeDirectory())/.config/wtfssd/config.json"))
         case "data-open":
             NSWorkspace.shared.open(URL(fileURLWithPath:
-                "\(NSHomeDirectory())/.local/share/ssdwtf"))
+                "\(NSHomeDirectory())/.local/share/wtfssd"))
         default:
             openInTerminal(cmd)
         }
@@ -157,14 +157,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func openInTerminal(_ subcommand: String) {
         let tmp = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ssdwtf-\(subcommand).command")
+            .appendingPathComponent("wtfssd-\(subcommand).command")
         let script = """
             #!/bin/sh
             cd "\(scanner.repoRoot)" 2>/dev/null
-            if command -v ssdwtf >/dev/null 2>&1; then
-                ssdwtf \(subcommand)
+            if command -v wtfssd >/dev/null 2>&1; then
+                wtfssd \(subcommand)
             else
-                python3 -m ssdwtf \(subcommand)
+                python3 -m wtfssd \(subcommand)
             fi
             echo; echo "— press return to close —"; read -r _
             """
@@ -182,7 +182,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             print(lines.joined(separator: "\n"))
         } else {
-            print("scan failed — is ssdwtf installed?")
+            print("scan failed — is wtfssd installed?")
         }
     }
 }

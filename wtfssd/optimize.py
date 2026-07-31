@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .collectors._run import run_cmd
 
-IGNORE_MARKER = "# ssdwtf — keep the indexer out of churn"
+IGNORE_MARKER = "# wtfssd — keep the indexer out of churn"
 IGNORE_LINES: list[str] = [
     "node_modules/", "dist/", "build/", ".next/", "out/",
     ".turbo/", "coverage/", "*.log",
@@ -31,13 +31,13 @@ def merge_ignore_file(root: Path) -> tuple[Path, list[str]]:
 
 
 def _program_args(fast: bool = False) -> list[str]:
-    """How to invoke ssdwtf: installed script if present, else python -m from source."""
+    """How to invoke wtfssd: installed script if present, else python -m from source."""
     from shutil import which
     tail = ["watch", "--once"] + (["--fast"] if fast else [])
-    exe = which("ssdwtf")
+    exe = which("wtfssd")
     if exe:
         return [exe] + tail
-    return [sys.executable, "-m", "ssdwtf"] + tail
+    return [sys.executable, "-m", "wtfssd"] + tail
 
 
 def _plist(label: str, interval_seconds: int, log_path: Path,
@@ -75,7 +75,7 @@ def _plist(label: str, interval_seconds: int, log_path: Path,
 
 
 def install_agent(interval_seconds: int = 3600,
-                  label: str = "com.ssdwtf.watch",
+                  label: str = "com.wtfssd.watch",
                   launch_agents_dir: Path | None = None) -> tuple[Path, bool]:
     from .config import data_dir
     agents = launch_agents_dir or (Path.home() / "Library" / "LaunchAgents")
@@ -96,7 +96,7 @@ def install_agent(interval_seconds: int = 3600,
     return plist_path, loaded
 
 
-def uninstall_agent(label: str = "com.ssdwtf.watch",
+def uninstall_agent(label: str = "com.wtfssd.watch",
                     launch_agents_dir: Path | None = None) -> bool:
     agents = launch_agents_dir or (Path.home() / "Library" / "LaunchAgents")
     plist_path = agents / f"{label}.plist"
@@ -109,7 +109,7 @@ def uninstall_agent(label: str = "com.ssdwtf.watch",
 
 
 def install_fast_agent(interval_seconds: int = 300,
-                       label: str = "com.ssdwtf.watch.fast",
+                       label: str = "com.wtfssd.watch.fast",
                        launch_agents_dir: Path | None = None) -> tuple[Path, bool]:
     """5-minute fast-tier watcher (watch --once --fast) alongside the hourly
     full agent. Same launchctl probe semantics as install_agent."""

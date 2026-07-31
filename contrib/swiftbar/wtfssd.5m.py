@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""ssdwtf menu-bar plugin for SwiftBar/xbar.
+"""wtfssd menu-bar plugin for SwiftBar/xbar.
 
 Menu bar: SSD:<grade> colored by worst severity.
 Dropdown: score, ten domains, top findings, actions.
 Refresh: every 5 minutes (the .5m. in the filename). No mutation: actions
 only run read-only scans or open Terminal for the user.
 
-Test hook: SSDWTF_JSON env var supplies a canned scan payload.
+Test hook: WTFSSD_JSON env var supplies a canned scan payload.
 """
 from __future__ import annotations
 
@@ -26,12 +26,12 @@ _MARKS = {"ok": "✅", "warn": "⚠️", "critical": "🔴", "unknown": "❔"}
 
 
 def _payload() -> dict:
-    override = os.environ.get("SSDWTF_JSON")
+    override = os.environ.get("WTFSSD_JSON")
     if override:
         return json.loads(override)
-    exe = shutil.which("ssdwtf")
+    exe = shutil.which("wtfssd")
     cmd = ([exe] if exe else
-           [sys.executable, "-m", "ssdwtf"]) + [
+           [sys.executable, "-m", "wtfssd"]) + [
         "scan", "--fast", "--json", "--no-history"]
     out = subprocess.run(cmd, capture_output=True, text=True, timeout=60,
                          cwd=None if exe else _REPO_ROOT)
@@ -40,10 +40,10 @@ def _payload() -> dict:
 
 def _scan_action() -> str:
     """Menu row for a full scan, mirroring _payload's launch fallback."""
-    if shutil.which("ssdwtf"):
-        return "Run full scan | bash=ssdwtf param1=scan terminal=true"
+    if shutil.which("wtfssd"):
+        return "Run full scan | bash=wtfssd param1=scan terminal=true"
     cmd = (f"cd {shlex.quote(_REPO_ROOT)} && "
-           f"{shlex.quote(sys.executable)} -m ssdwtf scan; read -r")
+           f"{shlex.quote(sys.executable)} -m wtfssd scan; read -r")
     return ('Run full scan | bash="/bin/bash" param1=-lc '
             f'param2="{cmd}" terminal=true')
 
@@ -82,7 +82,7 @@ def main() -> None:
     except Exception:
         print("SSD:? | color=gray")
         print("---")
-        print("ssdwtf scan failed — is the package installed?")
+        print("wtfssd scan failed — is the package installed?")
         raise SystemExit(0)
     print("\n".join(lines))
 

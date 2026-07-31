@@ -1,4 +1,4 @@
-# AGENTS.md — ssdwtf
+# AGENTS.md — wtfssd
 
 Guidance for AI coding agents working in this repository. Assumes no prior
 knowledge of the project.
@@ -9,26 +9,26 @@ The package was restored on 2026-07-30 by transcribing the implementation
 plan's contractual code listings (the source had been lost from the working
 tree; the restoration was reviewed per-module and whole-codebase, 81/81
 tests green, live-verified on macOS). The full package source under
-`ssdwtf/` is present and authoritative, alongside:
+`wtfssd/` is present and authoritative, alongside:
 
 - `pyproject.toml`, `README.md`, `LICENSE` — packaging, docs
 - `tests/` — the complete test suite (33 files, 211 tests)
   plus captured command-output fixtures in `tests/fixtures/`
-- `docs/superpowers/specs/2026-07-30-ssdwtf-design.md` — the design spec
-- `docs/superpowers/plans/2026-07-30-ssdwtf.md` — the implementation plan
+- `docs/superpowers/specs/2026-07-30-wtfssd-design.md` — the design spec
+- `docs/superpowers/plans/2026-07-30-wtfssd.md` — the implementation plan
   (3128 lines; contains the **exact contractual source** for every module,
   including code listings, per task)
-- `ssdwtf/.superpowers/sdd/` — per-task briefs/reports from the original
+- `wtfssd/.superpowers/sdd/` — per-task briefs/reports from the original
   build and the restoration (untracked process artifacts, gitignored)
 
 The git remote is `origin → https://github.com/ogprotege/wtfssd.git`. The
 checkout directory is named `wtfssd` but the project/package name is
-`ssdwtf` — every authoritative artifact (pyproject, tests, spec, plan) uses
-`ssdwtf`; do not rename the package to match the directory.
+`wtfssd` — every authoritative artifact (pyproject, tests, spec, plan) uses
+`wtfssd`; do not rename the package to match the directory.
 
 ## Project overview
 
-`ssdwtf` ("why is my Mac's SSD busy / full / 'dying'?") is a **zero-dependency
+`wtfssd` ("why is my Mac's SSD busy / full / 'dying'?") is a **zero-dependency
 Python 3 CLI for macOS** that monitors SSD wear, swap pressure, storage
 headroom, ghost IDE processes, and agentic-IDE state growth — then alerts,
 cleans safely, and optimizes churn at its source. It operationalizes the
@@ -59,7 +59,7 @@ Non-goals: GUI, Docker cleanup, remote/fleet monitoring, Windows/Linux.
   (This stdlib-only rule applies to the Python package; the menu bar app
   under `menubar/` is a separate Swift artifact — plain Swift, no
   dependencies.)
-- Build backend: setuptools (≥ 68); console script `ssdwtf = ssdwtf.cli:main`.
+- Build backend: setuptools (≥ 68); console script `wtfssd = wtfssd.cli:main`.
 - External commands (all read-only): `smartctl` (optional —
   `brew install smartmontools`; degrades to "unavailable" when missing),
   `sysctl`, `df`, `ps`, `du`, `osascript`, `launchctl`.
@@ -70,17 +70,17 @@ Non-goals: GUI, Docker cleanup, remote/fleet monitoring, Windows/Linux.
 
 ```sh
 # Run from source, no install needed (from repo root):
-python3 -m ssdwtf scan
-python3 -m ssdwtf scan --json
-python3 -m ssdwtf clean                       # dry-run, deletes nothing
-python3 -m ssdwtf clean cursor-caches --apply # actually clean (moves to Trash)
-python3 -m ssdwtf optimize ignore ~/my-project
-python3 -m ssdwtf watch --once
-python3 -m ssdwtf history
-python3 -m ssdwtf digest                      # one-look daily summary (--days N, --json)
-python3 -m ssdwtf config --show
+python3 -m wtfssd scan
+python3 -m wtfssd scan --json
+python3 -m wtfssd clean                       # dry-run, deletes nothing
+python3 -m wtfssd clean cursor-caches --apply # actually clean (moves to Trash)
+python3 -m wtfssd optimize ignore ~/my-project
+python3 -m wtfssd watch --once
+python3 -m wtfssd history
+python3 -m wtfssd digest                      # one-look daily summary (--days N, --json)
+python3 -m wtfssd config --show
 
-# Install the `ssdwtf` command into an isolated environment:
+# Install the `wtfssd` command into an isolated environment:
 pipx install .
 
 # Run the full test suite (from repo root):
@@ -96,16 +96,16 @@ exits `0`, or `3` on an unknown target.
 
 ## Code organization
 
-Per the design spec (`docs/superpowers/specs/2026-07-30-ssdwtf-design.md`),
+Per the design spec (`docs/superpowers/specs/2026-07-30-wtfssd-design.md`),
 the package layout is:
 
 ```
-ssdwtf/
+wtfssd/
   __init__.py            # __version__
   __main__.py            # entry: from .cli import main; sys.exit(main())
   cli.py                 # argparse: scan | clean | watch | optimize | history | digest | config
   models.py              # dataclasses shared across all modules (the contract)
-  config.py              # load/merge ~/.config/ssdwtf/config.json over defaults
+  config.py              # load/merge ~/.config/wtfssd/config.json over defaults
   collectors/
     __init__.py
     _run.py              # run_cmd(): subprocess wrapper (timeout, no shell, never raises)
@@ -132,7 +132,7 @@ ssdwtf/
     gitwatch.py          # read-only git status across configured repos → GitWatchReport
   analyze.py             # reports + config + history → list[Finding] + health score 0–100
   history.py             # JSONL scan history; trend / growth-rate analysis
-  metrics.py             # sqlite metrics baseline (~/.local/share/ssdwtf/metrics.db)
+  metrics.py             # sqlite metrics baseline (~/.local/share/wtfssd/metrics.db)
   alerts.py              # Finding → osascript notification; per-severity cooldowns
                          # + escalation transitions; alert_state.json state file
   cleaners.py            # CleanupTarget registry + dry-run/apply engine
@@ -143,7 +143,7 @@ tests/
   fixtures/              # captured outputs: smartctl.txt, sysctl_swap.txt, df.txt, ps.txt
   test_*.py              # one module per component (see Testing below)
 contrib/
-  swiftbar/ssdwtf.5m.py  # SwiftBar/xbar menu-bar plugin: SSD:<grade> title,
+  swiftbar/wtfssd.5m.py  # SwiftBar/xbar menu-bar plugin: SSD:<grade> title,
                          # domains/findings dropdown; 5-min scan --fast, read-only
 menubar/                 # native menu bar app — separate Swift artifact, NOT
                          # part of the Python package (Swift 6, SwiftPM,
@@ -165,7 +165,7 @@ SwiftPM (`cd menubar && ./build.sh`), and drives the CLI read-only
 Data flow: collectors → `models.HealthReport` → `analyze` → `[Finding]` +
 score → `report` (text | json); `history.append`, `metrics.record`, and
 `alerts.notify` branch off the same findings — every scan/watch pass appends
-JSONL history AND records metrics to `~/.local/share/ssdwtf/metrics.db`
+JSONL history AND records metrics to `~/.local/share/wtfssd/metrics.db`
 (`scan --no-history` does neither).
 `cleaners` sizes targets from collectors then dry-runs
 or Trashes; `optimize` writes ignore files / LaunchAgent plists.
@@ -205,9 +205,9 @@ These are contractual, from the implementation plan's global constraints:
 
 ## Configuration and runtime state
 
-- User config: `~/.config/ssdwtf/config.json` — deep-merged over code
-  defaults; only set keys are overridden. Inspect with `ssdwtf config --show`
-  (path: `ssdwtf config --path`). Useful keys: `swap.warn_gb`, `swap.crit_gb`,
+- User config: `~/.config/wtfssd/config.json` — deep-merged over code
+  defaults; only set keys are overridden. Inspect with `wtfssd config --show`
+  (path: `wtfssd config --path`). Useful keys: `swap.warn_gb`, `swap.crit_gb`,
   `disk.warn_free_pct`, `procs.ghost_days`, `state.vscdb_warn_gb`,
   `smart.device`, `smart.external_devices`, `alerts.cooldown_hours`,
   `alerts.cooldown_critical_hours`, `watch.interval_minutes`,
@@ -225,14 +225,14 @@ These are contractual, from the implementation plan's global constraints:
   `spotlight.warn_cpu_pct`, `logs.warn_gb_day`/`logs.extra_dirs`,
   `git.repos`/`git.warn_changes`/`git.warn_unpushed`.
 - Runtime state (the only writes monitoring makes):
-  `~/.local/share/ssdwtf/` — `history.jsonl`, `metrics.db`,
+  `~/.local/share/wtfssd/` — `history.jsonl`, `metrics.db`,
   `alert_state.json`, `churn_state.json`, `launchd_baseline.json`,
   `watch.log` / `watch-fast.log` (LaunchAgent stdout/stderr), `backups/`.
   Both exist on the development machine.
 
 ## Safety model (security considerations)
 
-`ssdwtf` deletes files by design, so these rules are load-bearing — preserve
+`wtfssd` deletes files by design, so these rules are load-bearing — preserve
 them in any change to `cleaners.py`:
 
 - **Dry-run by default.** `clean` never touches a file without `--apply`.
@@ -241,7 +241,7 @@ them in any change to `cleaners.py`:
 - **App guards.** Cleaning a target whose owning app is running is skipped
   with an explanation; `--force` overrides.
 - **Backup-first.** High-risk targets (the Cursor chat database) are copied
-  to `~/.local/share/ssdwtf/backups/` before removal.
+  to `~/.local/share/wtfssd/backups/` before removal.
 - **Denylist.** Paths outside the user's home directory, the home directory
   itself, and `Documents`/`Desktop`/`Movies`/`Music`/`Pictures` are never
   touched.
@@ -257,12 +257,12 @@ them in any change to `cleaners.py`:
 
 - The project was built with superpowers subagent-driven development: spec →
   plan → 12 tasks, each with a brief and review report under
-  `ssdwtf/.superpowers/sdd/`. When changing behavior, consult
-  `docs/superpowers/specs/2026-07-30-ssdwtf-design.md` first and keep it in
+  `wtfssd/.superpowers/sdd/`. When changing behavior, consult
+  `docs/superpowers/specs/2026-07-30-wtfssd-design.md` first and keep it in
   sync.
 - The plan file mandates running **only your own test module** during
   development, not the whole suite, when working in parallel.
 - No CI configuration exists; verification is the local unittest suite plus
-  manual live runs (`python3 -m ssdwtf scan`) on macOS.
+  manual live runs (`python3 -m wtfssd scan`) on macOS.
 - Git: `origin` points at `https://github.com/ogprotege/wtfssd.git`. Do not
   commit or push unless explicitly asked.

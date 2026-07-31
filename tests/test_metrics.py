@@ -4,8 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssdwtf import metrics, models
-from ssdwtf.models import (ApfsReport, DiskReport, HealthReport, ProcessReport,
+from wtfssd import metrics, models
+from wtfssd.models import (ApfsReport, DiskReport, HealthReport, ProcessReport,
                            SmartReport, StateDir, StateDirReport, SwapReport,
                            make_empty_report)
 

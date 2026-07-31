@@ -136,7 +136,7 @@ struct PopoverView: View {
                 }
             } else {
                 Text(model.lastError
-                     ? "scan failed — is ssdwtf installed?"
+                     ? "scan failed — is wtfssd installed?"
                      : "scanning…")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
@@ -149,7 +149,7 @@ struct PopoverView: View {
 
     private var header: some View {
         HStack {
-            Text("SSDWTF MONITOR").font(Theme.sectionFont)
+            Text("WTFSSD MONITOR").font(Theme.sectionFont)
                 .foregroundStyle(.secondary)
             Spacer()
             Button { model.showSettings = true } label: {

@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ssdwtf"
+name = "wtfssd"
 version = "0.1.0"
 description = "Monitor, clean, alert and optimize a Mac drowning in agentic-IDE state"
 readme = "README.md"
@@ -11,7 +11,8 @@ requires-python = ">=3.10"
 license = { text = "MIT" }
 
 [project.scripts]
-ssdwtf = "ssdwtf.cli:main"
+wtfssd = "wtfssd.cli:main"
+ssdwtf = "wtfssd.cli:main"  # legacy alias
 
 [tool.setuptools.packages.find]
-include = ["ssdwtf*"]
+include = ["wtfssd*"]

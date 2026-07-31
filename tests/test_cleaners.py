@@ -6,8 +6,8 @@ import time
 import unittest
 from pathlib import Path
 
-from ssdwtf import cleaners
-from ssdwtf.config import DEFAULTS
+from wtfssd import cleaners
+from wtfssd.config import DEFAULTS
 
 
 def no_apps_running(argv, timeout=15):

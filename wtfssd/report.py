@@ -18,7 +18,7 @@ def format_bytes(n: int | float) -> str:
 
 
 def _bar(rep: HealthReport) -> str:
-    return (f"ssdwtf scan — {rep.timestamp} · host RAM {rep.host_ram_gb:.0f} GB")
+    return (f"wtfssd scan — {rep.timestamp} · host RAM {rep.host_ram_gb:.0f} GB")
 
 
 def domain_table(domains: dict[str, str]) -> list[str]:
@@ -144,7 +144,7 @@ def render_history(history: list[HealthReport]) -> str:
 def render_digest(report: HealthReport, findings: list[Finding],
                   stats: dict) -> str:
     """One-look daily summary: domains, key deltas, findings by severity."""
-    lines = [f"ssdwtf digest — {report.timestamp} "
+    lines = [f"wtfssd digest — {report.timestamp} "
              f"(window: {stats.get('days', 1)} day(s))", ""]
     lines.append(f"  scans recorded: {stats.get('scans', 0)}")
     domains = stats.get("domains", {})

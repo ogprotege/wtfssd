@@ -6,7 +6,7 @@ import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from ssdwtf import alerts, models
+from wtfssd import alerts, models
 
 
 def finding(sev: str, code: str) -> models.Finding:
