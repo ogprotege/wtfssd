@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssdwtf import metrics
+from ssdwtf import metrics, models
 from ssdwtf.models import (ApfsReport, DiskReport, HealthReport, ProcessReport,
                            SmartReport, StateDir, StateDirReport, SwapReport,
                            make_empty_report)
@@ -77,6 +77,21 @@ class TestMetrics(unittest.TestCase):
     def test_record_never_raises_on_bad_path(self):
         rep = _report("2026-07-30T10:00:00", 512.0)
         metrics.record(rep, path=Path("/nonexistent-dir-x/m.db"))  # no raise
+
+    def test_phase2_metrics_extract(self):
+        with tempfile.TemporaryDirectory() as td:
+            db = Path(td) / "m.db"
+            rep = _report("2026-07-30T10:00:00", 512.0)
+            rep.churn = models.ChurnReport(available=True, added=3, removed=2)
+            rep.logs = models.LogsReport(available=True,
+                                         total_bytes=int(2.5e9))
+            rep.processes = models.ProcessReport(ide_procs=[
+                models.GhostProcess(pid=7, ppid=1, name="Cursor",
+                                    age_seconds=10, rss_mb=512.0)])
+            metrics.record(rep, path=db)
+            self.assertEqual(metrics.latest("churn.turnover", path=db), 5.0)
+            self.assertEqual(metrics.latest("logs.total_gb", path=db), 2.5)
+            self.assertEqual(metrics.latest("procs.rss.7", path=db), 512.0)
 
 
 if __name__ == "__main__":

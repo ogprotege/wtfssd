@@ -92,6 +92,22 @@ def _extract(report: HealthReport) -> dict[str, float]:
     crashes = getattr(report, "crashes", None)
     if crashes is not None and getattr(crashes, "available", False):
         put("crashes.weekly_count", crashes.total_weekly)
+    churn = getattr(report, "churn", None)
+    if churn is not None and getattr(churn, "available", False) \
+            and getattr(churn, "error", None) is None:
+        put("churn.turnover", churn.added + churn.removed)
+    fds = getattr(report, "fds", None)
+    if fds is not None and getattr(fds, "available", False):
+        put("fds.max_count", fds.max_count)
+    mcp = getattr(report, "mcp", None)
+    if mcp is not None and getattr(mcp, "available", False):
+        put("mcp.live_servers", sum(1 for s in mcp.servers if s.live_pids > 0))
+    logs = getattr(report, "logs", None)
+    if logs is not None and getattr(logs, "available", False):
+        put("logs.total_gb", logs.total_bytes / _GB)
+    spot = getattr(report, "spotlight", None)
+    if spot is not None and getattr(spot, "available", False):
+        put("spotlight.mds_cpu_pct", spot.mds_cpu_pct)
     # per-PID RSS series feed the leak-slope detector (dynamic metric names)
     for proc in getattr(report.processes, "ide_procs", [])[:25]:
         put(f"procs.rss.{proc.pid}", proc.rss_mb)

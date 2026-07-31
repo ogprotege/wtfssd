@@ -11,20 +11,30 @@ from . import alerts, analyze, cleaners, history, metrics, optimize
 from . import report as report_mod
 from .collectors import apfs as apfs_col
 from .collectors import backup as backup_col
+from .collectors import churn as churn_col
 from .collectors import crashes as crashes_col
 from .collectors import disk as disk_col
+from .collectors import fds as fds_col
+from .collectors import gitwatch as gitwatch_col
+from .collectors import launchd as launchd_col
+from .collectors import logs as logs_col
+from .collectors import mcp as mcp_col
 from .collectors import pressure as pressure_col
 from .collectors import processes as proc_col
+from .collectors import retention as retention_col
+from .collectors import secrets as secrets_col
 from .collectors import smart as smart_col
 from .collectors import smartext as smartext_col
+from .collectors import spotlight as spotlight_col
 from .collectors import statedirs as statedirs_col
 from .collectors import swap as swap_col
 from .collectors import system as system_col
 from .collectors import writerate as writerate_col
 from .collectors._run import run_cmd
 from .config import config_path, load_config
-from .models import (ApfsReport, BackupReport, CrashReport, HealthReport,
-                     StateDirReport, report_to_dict)
+from .models import (ApfsReport, BackupReport, ChurnReport, CrashReport,
+                     FdsReport, GitWatchReport, HealthReport, LogsReport,
+                     SecretsReport, StateDirReport, report_to_dict)
 
 
 def host_ram_gb() -> float:
@@ -70,6 +80,26 @@ def build_report(config: dict, fast: bool = False) -> HealthReport:
             config.get("writerate", {}).get("device", "disk0")),
         external_smart=[smartext_col.collect_smart_external(d)
                         for d in config["smart"].get("external_devices", [])],
+        retention=retention_col.collect_retention(),
+        launchd=launchd_col.collect_launchd(),
+        spotlight=spotlight_col.collect_spotlight(),
+        mcp=mcp_col.collect_mcp(),
+        churn=(churn_col.collect_churn() if want("churn")
+               else ChurnReport(available=False, error="not collected (--fast)")),
+        fds=(fds_col.collect_fds() if want("fds")
+             else FdsReport(available=False, error="not collected (--fast)")),
+        secrets=(secrets_col.collect_secrets(
+                    enabled=config.get("secrets", {}).get("enabled", False))
+                 if want("secrets")
+                 else SecretsReport(available=False, error="not collected (--fast)")),
+        logs=(logs_col.collect_logs(
+                extra_dirs=tuple(config.get("logs", {}).get("extra_dirs", [])))
+              if want("logs")
+              else LogsReport(available=False, error="not collected (--fast)")),
+        gitwatch=(gitwatch_col.collect_gitwatch(
+                    config.get("git", {}).get("repos", []))
+                  if want("gitwatch")
+                  else GitWatchReport(available=False, error="not collected (--fast)")),
     )
 
 
@@ -89,7 +119,8 @@ def _run_scan(config: dict, use_history: bool,
         history.append_history(rep)
         metrics.record(rep)
     hist = history.load_history()
-    findings = analyze.analyze(rep, hist, config)
+    findings = analyze.analyze(rep, hist, config,
+                               metrics_path=metrics.db_path() if use_history else None)
     return rep, findings, _exit_code(findings)
 
 
