@@ -229,3 +229,86 @@ tempdir DBs; no test shells out. New fixtures: `memory_pressure.txt`,
 `tmutil_snapshots.txt`, `diskutil_info.txt`, `iostat.txt`,
 `smartctl_external.txt`. Existing 81 tests must keep passing unmodified
 except where a task explicitly extends a fixture/model.
+
+---
+
+## 10. Phase 2 detail (this spec's second plan)
+
+Phase 2 adds process-lifecycle depth, privacy/retention auditing, and
+work-loss protection. Same constraints: stdlib only, no sudo, never raise,
+read-only (the only writes are state files under `~/.local/share/ssdwtf/`).
+
+### 10.1 New collectors
+
+| Collector | Source | Report | Notes |
+|---|---|---|---|
+| processes.py extension | existing ps parse | `ProcessReport.ide_procs: list[GhostProcess]` (additive field) | every IDE-family process with pid+RSS, not just ghosts — feeds RSS slopes |
+| `churn.py` | `*.pack` files under `~/.cursor` + `~/Library/Application Support/Cursor/CachedData` (pure FS) | `ChurnReport` | file set diff vs `churn_state.json`: added+removed between scans = turnover |
+| `fds.py` | `lsof -nP` (one run, aggregated per command) | `FdsReport` | per-app open-fd counts, max single pid |
+| `mcp.py` | `claude_desktop_config.json` + `pgrep -f` + `ps` | `MCPReport` | declared MCP servers → live pids, RSS, age, orphans (alive while Claude.app dead) |
+| `secrets.py` | regex scan of `~/.claude` transcripts, `claude_desktop_config.json`, state.vscdb (sqlite3 read-only) | `SecretsReport` | OPT-IN (`secrets.enabled=false` default). Reports path+line+rule only, NEVER values. Files > 5 MB skipped |
+| `retention.py` | static config reads (`~/.claude/settings.json` `cleanupPeriodDays`, Cursor equivalent) | `RetentionReport` | per-tool lifecycle-control posture |
+| `launchd.py` | plist filenames in `~/Library/LaunchAgents`, `/Library/LaunchAgents`, `/Library/LaunchDaemons` | `LaunchdReport` | baseline diff via `launchd_baseline.json`; first run stores baseline, no findings |
+| `spotlight.py` | `mdutil -s /` + `ps` CPU of mds_stores/mdworker | `SpotlightReport` | indexing state + indexer CPU |
+| `logs.py` | size walk of `~/Library/Logs` children + `logs.extra_dirs` | `LogsReport` | total + per-dir sizes; growth via metrics |
+| `gitwatch.py` | `git -C <repo> status --porcelain`, `remote`, `log --branches --not --remotes` (all read-only, no network) | `GitWatchReport` | uncommitted/untracked counts, has_remote, unpushed commit count per repo in `git.repos` |
+
+### 10.2 State-dir registry expansion + categories
+
+`statedirs.py`: `StateDir` gains `category: str = ""`. New entries:
+zed-app-support, codex-home (`.codex`), jetbrains-app-support,
+ollama-models (`.ollama`), lmstudio-cache (`.cache/lm-studio`),
+huggingface-cache (`.cache/huggingface`), mlx-cache (`.cache/mlx`),
+docker-data (`Library/Containers/com.docker.docker`). Categories:
+`ai-state | ide-cache | build-artifacts | models | user-caches | dev-deps`.
+`StateDirReport` gains `category_totals: dict[str, int]` and `total_bytes`
+becomes double-count-safe: entries whose path is contained in another
+tracked entry's path (cursor-vscdb, cursor-vscdb-backups inside
+cursor-app-support) are excluded from `total_bytes` (still reported
+individually). Existing tests updated accordingly (sanctioned edit).
+
+### 10.3 New findings (all gated on availability)
+
+| Finding | Severity | Rule (config key) | Evidence |
+|---|---|---|---|
+| `procs.leak` | warn | per-PID RSS slope > `procs.leak_warn_mb_h` (100 MB/h) over `procs.leak_window_h` (6 h) via metrics | derived |
+| `state.churn` | warn | pack-file turnover since last scan ≥ `churn.warn_turnover` (20 files) or new size ≥ `churn.warn_gb` (5) | measured |
+| `procs.fds` | warn | any watched app fd count ≥ `fds.warn_count` (4000) | measured |
+| `mcp.orphan` | warn | MCP server processes alive while Claude.app is not running | measured |
+| `mcp.dead` | info | declared server with no live pid while Claude.app IS running | measured |
+| `secrets.exposed` | warn | ≥1 match (only when `secrets.enabled`) — title names file+rule, never value | measured |
+| `retention.missing` | info | a watched tool has no retention/cleanup setting configured | measured |
+| `launchd.new` | warn | new LaunchAgent/Daemon entries vs baseline | measured |
+| `spotlight.storm` | warn | mds_stores+mdworker CPU ≥ `spotlight.warn_cpu_pct` (50) | measured |
+| `logs.growth` | warn | logs growth ≥ `logs.warn_gb_day` (0.5) via metrics | derived |
+| `work.uncommitted` | warn | repo with ≥ `git.warn_changes` (50) changed+untracked files | measured |
+| `work.no_remote` | warn | repo with no git remote configured | measured |
+| `work.unpushed` | warn | ≥ `git.warn_unpushed` (10) local commits not on any remote | measured |
+
+### 10.4 Domains grow to 10
+
+Add `privacy` (secrets.*, retention.*) and `work` (work.*). `mcp.*` →
+processes, `procs.leak`/`procs.fds` → processes, `state.churn`/`logs.*` →
+state, `launchd.*` → stability, `spotlight.*` → stability.
+
+### 10.5 Config additions
+
+```json
+"procs": {"leak_warn_mb_h": 100, "leak_window_h": 6},
+"churn": {"warn_turnover": 20, "warn_gb": 5},
+"fds": {"warn_count": 4000},
+"mcp": {"config_path": "~/Library/Application Support/Claude/claude_desktop_config.json"},
+"secrets": {"enabled": false},
+"spotlight": {"warn_cpu_pct": 50},
+"logs": {"warn_gb_day": 0.5, "extra_dirs": []},
+"git": {"repos": [], "warn_changes": 50, "warn_unpushed": 10}
+```
+
+Tiers: fast += retention, launchd, spotlight, mcp (cheap file/probe ops);
+slow += churn, fds, secrets, logs, gitwatch.
+
+### 10.6 Metrics additions
+
+`procs.rss.<pid>` (per IDE process, feeds slopes), `churn.turnover`,
+`fds.max_count`, `mcp.live_servers`, `logs.total_gb`,
+`spotlight.mds_cpu_pct`. Dynamic per-PID metric names are intentional.
