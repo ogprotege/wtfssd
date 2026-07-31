@@ -92,6 +92,9 @@ def _extract(report: HealthReport) -> dict[str, float]:
     crashes = getattr(report, "crashes", None)
     if crashes is not None and getattr(crashes, "available", False):
         put("crashes.weekly_count", crashes.total_weekly)
+    # per-PID RSS series feed the leak-slope detector (dynamic metric names)
+    for proc in getattr(report.processes, "ide_procs", [])[:25]:
+        put(f"procs.rss.{proc.pid}", proc.rss_mb)
     return out
 
 
