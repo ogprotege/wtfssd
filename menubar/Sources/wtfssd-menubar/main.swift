@@ -56,9 +56,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             popover.performClose(nil)
         } else {
             refresh()
+            fitPopover()
             popover.show(relativeTo: button.bounds, of: button,
                          preferredEdge: .minY)
         }
+    }
+
+    /// NSPopover does not auto-fit an NSHostingController: size it from the
+    /// SwiftUI view's fitting size, on show and whenever content changes.
+    private func fitPopover() {
+        guard let vc = popover.contentViewController else { return }
+        vc.view.layoutSubtreeIfNeeded()
+        let fit = vc.view.fittingSize
+        popover.contentSize = NSSize(width: max(292, fit.width),
+                                     height: max(120, fit.height))
     }
 
     @objc func refresh() {
@@ -70,6 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self.model.payload = payload
                     self.model.lastError = false
                     self.renderTitle()
+                    if self.popover?.isShown == true { self.fitPopover() }
                 }
             } catch {
                 DispatchQueue.main.async {
