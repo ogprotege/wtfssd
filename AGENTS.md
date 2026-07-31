@@ -12,7 +12,7 @@ tests green, live-verified on macOS). The full package source under
 `ssdwtf/` is present and authoritative, alongside:
 
 - `pyproject.toml`, `README.md`, `LICENSE` — packaging, docs
-- `tests/` — the complete test suite (33 files, 210 tests)
+- `tests/` — the complete test suite (33 files, 211 tests)
   plus captured command-output fixtures in `tests/fixtures/`
 - `docs/superpowers/specs/2026-07-30-ssdwtf-design.md` — the design spec
 - `docs/superpowers/plans/2026-07-30-ssdwtf.md` — the implementation plan
@@ -200,7 +200,7 @@ These are contractual, from the implementation plan's global constraints:
 - Filesystem-touching tests (cleaners, optimize, history, config) run against
   `tempfile.TemporaryDirectory` and fakes; `cli` tests use `unittest.mock` to
   patch `build_report`, `analyze`, history, and config paths.
-- The suite is **210 tests, all passing** (verified after the Phase 3
+- The suite is **211 tests, all passing** (verified after the Phase 3
   monitor expansion: alerts, digest, fast-tier agent, SwiftBar plugin).
 
 ## Configuration and runtime state
