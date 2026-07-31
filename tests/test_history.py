@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from ssdwtf import models
@@ -65,21 +66,36 @@ class TestHistory(unittest.TestCase):
         self.assertIsNone(history.gb_written_per_day(same))
 
     def test_state_growth_rate(self):
-        h = [make_report("2026-07-29T10:00:00", None, 1_000_000_000),
-             make_report("2026-07-30T10:00:00", None, 3_000_000_000)]
+        now = datetime.now()
+        h = [make_report((now - timedelta(days=1)).isoformat(), None, 1_000_000_000),
+             make_report(now.isoformat(), None, 3_000_000_000)]
         self.assertAlmostEqual(history.state_growth_gb_per_day(h), 2.0)
 
     def test_state_growth_ignores_uncollected_fast_rows(self):
+        now = datetime.now()
+        day = timedelta(days=1)
         fast = "not collected (--fast)"
         # fast row in the middle: growth reflects 10 → 11 GB only
-        h = [make_report("2026-07-29T10:00:00", None, 10_000_000_000),
-             make_report("2026-07-29T22:00:00", None, 0, note=fast),
-             make_report("2026-07-30T10:00:00", None, 11_000_000_000)]
+        h = [make_report((now - day).isoformat(), None, 10_000_000_000),
+             make_report((now - day / 2).isoformat(), None, 0, note=fast),
+             make_report(now.isoformat(), None, 11_000_000_000)]
         self.assertAlmostEqual(history.state_growth_gb_per_day(h), 1.0)
         # fast row at the window start must not inflate the delta
-        h = [make_report("2026-07-28T10:00:00", None, 0, note=fast),
-             make_report("2026-07-29T10:00:00", None, 10_000_000_000),
-             make_report("2026-07-30T10:00:00", None, 11_000_000_000)]
+        h = [make_report((now - 2 * day).isoformat(), None, 0, note=fast),
+             make_report((now - day).isoformat(), None, 10_000_000_000),
+             make_report(now.isoformat(), None, 11_000_000_000)]
+        self.assertAlmostEqual(history.state_growth_gb_per_day(h), 1.0)
+
+    def test_state_growth_window_excludes_old_step(self):
+        now = datetime.now()
+        day = timedelta(days=1)
+        # a one-time +999 GB step 19 days ago (e.g. registry expansion) is
+        # older than the 14-day fitting window and must not inflate the slope
+        h = [make_report((now - 20 * day).isoformat(), None, 1_000_000_000),
+             make_report((now - 19 * day).isoformat(), None, 1_000_000_000_000),
+             make_report((now - day).isoformat(), None, 1_001_000_000_000),
+             make_report(now.isoformat(), None, 1_002_000_000_000)]
+        # slope fits only the trailing window: 1 GB over 1 day
         self.assertAlmostEqual(history.state_growth_gb_per_day(h), 1.0)
 
 

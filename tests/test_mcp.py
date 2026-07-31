@@ -19,6 +19,17 @@ PS = """  PID ELAPSED     RSS ARGS
   504 00:30:00    5120 /usr/sbin/sshd
 """
 
+CONFIG_NPX = {"mcpServers": {
+    "firecrawl": {"command": "npx", "args": ["-y", "firecrawl-mcp"]},
+    "mytool": {"command": "/usr/local/bin/mytool", "args": ["serve"]},
+}}
+
+PS_NPX = """  PID ELAPSED     RSS ARGS
+  601 02:00:00  310272 npx -y firecrawl-mcp
+  602 01:00:00  204800 npx something-else
+  603 03:00:00   51200 /usr/local/bin/mytool serve --port 9
+"""
+
 
 class TestMcp(unittest.TestCase):
     def _config_file(self, td: str) -> Path:
@@ -53,6 +64,21 @@ class TestMcp(unittest.TestCase):
             rep = mcp.collect_mcp(config_path=self._config_file(td),
                                   runner=lambda cmd: None, home=Path(td))
             self.assertFalse(rep.available)
+
+    def test_npx_server_matches_full_command_only(self):
+        # a generic interpreter (npx) must not match every npx process —
+        # only the one whose args contain the full declared command string
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "cfg.json"
+            p.write_text(json.dumps(CONFIG_NPX))
+            rep = mcp.collect_mcp(config_path=p, runner=lambda cmd: PS_NPX,
+                                  home=Path(td))
+        self.assertTrue(rep.available)
+        by_name = {s.name: s for s in rep.servers}
+        self.assertEqual(by_name["firecrawl"].live_pids, 1)
+        self.assertAlmostEqual(by_name["firecrawl"].rss_mb, 303.0, places=0)
+        # non-interpreter commands still match on the basename
+        self.assertEqual(by_name["mytool"].live_pids, 1)
 
 
 if __name__ == "__main__":

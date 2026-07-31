@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable
 
 from ..models import GitWatchReport, RepoStatus
 from ._run import run_cmd

@@ -10,6 +10,11 @@ from .processes import etime_to_seconds
 
 _CLAUDE_MARKER = "Claude.app/Contents/MacOS/Claude"
 
+# Interpreters/launchers whose basename alone matches dozens of unrelated
+# processes — these require the full command + args match string.
+_GENERIC_INTERPRETERS = {"node", "npx", "python", "python3", "uv", "uvx",
+                         "deno", "bun", "ruby"}
+
 
 def parse_mcp_config(text: str) -> dict[str, str]:
     """claude_desktop_config.json → {server name: match string}. Tolerates
@@ -35,6 +40,18 @@ def parse_mcp_config(text: str) -> dict[str, str]:
 
 def _basename(match: str) -> str:
     return match.split()[0].rsplit("/", 1)[-1]
+
+
+def _matches(match: str, args: str) -> bool:
+    """True when a ps args line belongs to the declared server. Generic
+    interpreters (npx, node, python, ...) match on the full command + args
+    string; anything else matches on the command basename."""
+    token = _basename(match)
+    if not token:
+        return False
+    if token in _GENERIC_INTERPRETERS:
+        return match in args
+    return token in args
 
 
 def collect_mcp(config_path: Optional[Path] = None,
@@ -72,8 +89,7 @@ def collect_mcp(config_path: Optional[Path] = None,
 
     servers: list[MCPServer] = []
     for name, match in sorted(declared.items()):
-        token = _basename(match)
-        hits = [p for p in procs if token and token in p[3]]
+        hits = [p for p in procs if _matches(match, p[3])]
         servers.append(MCPServer(
             name=name, command=match,
             live_pids=len(hits),

@@ -56,7 +56,8 @@ ssdwtf scan              # full health report: SMART, storage, swap, ghost
                          # processes, agentic-state sizes, findings, health score
 ssdwtf scan --json       # same, machine-readable
 ssdwtf scan --fast       # fast tier only (skips state-dir sizing, APFS
-                         # snapshots, backup, crashes); watch --fast likewise
+                         # snapshots, backup, crashes, churn, fds, secrets,
+                         # logs, gitwatch); watch --fast likewise
 ssdwtf clean             # dry-run: lists what *would* be cleaned, deletes nothing
 ssdwtf clean cursor-caches --apply   # actually clean (moves to Trash)
 ssdwtf optimize ignore ~/my-project  # write/merge .cursorignore churn rules
