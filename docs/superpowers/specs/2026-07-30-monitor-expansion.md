@@ -359,6 +359,10 @@ fast-tier poller agent.
 
 ### 11.5 Menu-bar plugin (contrib/swiftbar/ssdwtf.5m.py)
 
+**Superseded by:** the native Swift menu bar app at `menubar/` (SwiftUI
+popover) is now the primary menu-bar surface. This SwiftBar plugin remains
+as a lightweight alternative for users who already run SwiftBar/xbar.
+
 - SwiftBar/xbar-compatible plugin, stdlib Python 3, executable. Runs
   `ssdwtf scan --fast --json --no-history` (resolves the package by trying
   the `ssdwtf` console script, then `python3 -m ssdwtf` with cwd = repo root

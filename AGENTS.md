@@ -56,6 +56,9 @@ Non-goals: GUI, Docker cleanup, remote/fleet monitoring, Windows/Linux.
 
 - **Python ≥ 3.10, standard library only.** No pip installs, no third-party
   imports, no venv required. Developed against Python 3.14.6 on macOS arm64.
+  (This stdlib-only rule applies to the Python package; the menu bar app
+  under `menubar/` is a separate Swift artifact — plain Swift, no
+  dependencies.)
 - Build backend: setuptools (≥ 68); console script `ssdwtf = ssdwtf.cli:main`.
 - External commands (all read-only): `smartctl` (optional —
   `brew install smartmontools`; degrades to "unavailable" when missing),
@@ -142,7 +145,22 @@ tests/
 contrib/
   swiftbar/ssdwtf.5m.py  # SwiftBar/xbar menu-bar plugin: SSD:<grade> title,
                          # domains/findings dropdown; 5-min scan --fast, read-only
+menubar/                 # native menu bar app — separate Swift artifact, NOT
+                         # part of the Python package (Swift 6, SwiftPM,
+                         # SwiftUI popover, no dependencies)
+  Package.swift          # executable target wtfssd-menubar (macOS 13+)
+  Sources/wtfssd-menubar/  # main.swift (status item + popover, 60s refresh
+                         # from scan --fast --json --no-history; --snapshot /
+                         # --dump-menu debug flags), Scanner.swift, PopoverView.swift
+  Info.plist             # LSUIElement app metadata; build.sh bakes the repo
+                         # root into it and assembles build/WTFSSDMonitor.app
+  build.sh               # swift build -c release → build/WTFSSDMonitor.app
 ```
+
+The menu bar app under `menubar/` is a separate Swift artifact, not part of
+the Python package: it is plain Swift with no dependencies, built with
+SwiftPM (`cd menubar && ./build.sh`), and drives the CLI read-only
+(`scan --fast --json --no-history`).
 
 Data flow: collectors → `models.HealthReport` → `analyze` → `[Finding]` +
 score → `report` (text | json); `history.append`, `metrics.record`, and
