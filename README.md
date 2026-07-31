@@ -76,23 +76,30 @@ Exit codes for `scan` / `watch --once` / `digest`: `0` no findings,
 `1` warnings only, `2` any critical finding, `3` internal error. `clean`
 exits `0`, or `3` on an unknown target.
 
-## Menu bar (SwiftBar)
+## Menu bar app
 
-`contrib/swiftbar/ssdwtf.5m.py` is a SwiftBar/xbar plugin that puts the
-health grade in the menu bar — `SSD:A`, colored green/yellow/red by the
-worst current finding (gray when unknown). The dropdown carries the score,
-all ten domains, the top findings, and actions to run a full scan in
-Terminal or refresh. It re-renders every 5 minutes from
-`ssdwtf scan --fast --json --no-history`; everything it does is read-only.
+`menubar/` is a native Swift menu bar app (SwiftUI popover, no
+dependencies) that puts the health score and grade in the menu bar —
+`SSD 92·A`, colored green/yellow/red by the worst current finding. The
+popover shows a hero score + grade, a VITALS strip, all ten domains with
+status markers, the current findings, and Full Scan / Digest / Quit
+actions (scan and digest open in Terminal). It refreshes every 60 seconds
+from `ssdwtf scan --fast --json --no-history`; everything it does is
+read-only.
 
 ```sh
-brew install --cask swiftbar
-ln -s "$(pwd)/contrib/swiftbar/ssdwtf.5m.py" "$HOME/Library/Application Support/SwiftBar/Plugins/"
+cd menubar && ./build.sh        # builds build/WTFSSDMonitor.app
+open build/WTFSSDMonitor.app
 ```
 
-The plugin prefers an installed `ssdwtf` command; from a source checkout it
-falls back to `python3 -m ssdwtf` with the repo root as working directory,
-so keep the symlink pointing at the checkout.
+The app prefers an installed `ssdwtf` command; from a source checkout it
+falls back to `python3 -m ssdwtf` with the repo root as working directory
+(the repo path is baked into the app at build time, so rebuild if you move
+the checkout).
+
+A SwiftBar/xbar plugin alternative remains at
+`contrib/swiftbar/ssdwtf.5m.py` — same data, rendered as a text dropdown
+inside SwiftBar instead of a native popover.
 
 ## Safety model
 
