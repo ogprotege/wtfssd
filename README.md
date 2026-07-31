@@ -3,7 +3,9 @@
 Why is my Mac's SSD busy / full / "dying"? A zero-dependency Python 3 CLI that
 monitors SSD wear, swap pressure, storage headroom, ghost IDE processes, and
 agentic-IDE state growth — then alerts you, cleans safely, and fixes the churn
-at its source.
+at its source. It also watches memory pressure, uptime, thermal throttle and
+battery state, APFS local snapshots, Time Machine backup readiness, IDE crash
+frequency, live write rate, and external drives.
 
 It exists because of the vibe-coding SSD panic: after months of heavy agentic
 coding (dozens of parallel agents, IDEs scaffolding apps autonomously), developers
@@ -47,6 +49,8 @@ ssdwtf scan
 ssdwtf scan              # full health report: SMART, storage, swap, ghost
                          # processes, agentic-state sizes, findings, health score
 ssdwtf scan --json       # same, machine-readable
+ssdwtf scan --fast       # fast tier only (skips state-dir sizing, APFS
+                         # snapshots, backup, crashes); watch --fast likewise
 ssdwtf clean             # dry-run: lists what *would* be cleaned, deletes nothing
 ssdwtf clean cursor-caches --apply   # actually clean (moves to Trash)
 ssdwtf optimize ignore ~/my-project  # write/merge .cursorignore churn rules
@@ -93,17 +97,37 @@ Example — alert on swap earlier than the 8 GB default:
 ```
 
 Other useful keys: `disk.warn_free_pct`, `procs.ghost_days`,
-`state.vscdb_warn_gb`, `smart.device`, `alerts.cooldown_hours`,
+`state.vscdb_warn_gb`, `smart.device`, `smart.external_devices` (extra drives
+to probe, e.g. `["/dev/disk2"]`), `alerts.cooldown_hours`,
 `watch.interval_minutes`, `projects` (directories scanned for stale
-`node_modules`). Run `ssdwtf config --show` for the full merged picture.
+`node_modules`), `tiers.fast` / `tiers.slow` (which collectors `--fast` keeps
+and skips), `backup.enabled` / `backup.warn_hours` / `backup.crit_hours`
+(Time Machine freshness), `apfs.snapshot_warn_days`,
+`pressure.sustained_min`, `crashes.warn_weekly` / `crashes.apps`,
+`thermal.warn_below`, `uptime.warn_days`, `writerate.warn_mb_s`,
+`battery.capacity_info_pct`. Run `ssdwtf config --show` for the full merged
+picture.
 
 ## How it works
 
-- `ssdwtf/collectors/` — read-only probes: SMART (`smartctl`), swap (`sysctl`),
-  disk (`df -k`, 1K-blocks converted to decimal GB), processes (`ps`),
-  agentic state dirs (`du`-style sizing).
-- `ssdwtf/analyze.py` — turns a report + history into severity-ranked findings.
+- `ssdwtf/collectors/` — read-only probes: SMART (`smartctl`, including the
+  NVMe critical-warning flag and the device-reported spare threshold), swap
+  (`sysctl`), disk (`df -k`, 1K-blocks converted to decimal GB), processes
+  (`ps`), agentic state dirs (`du`-style sizing), memory pressure
+  (`sysctl` / `memory_pressure`), uptime / thermal throttle / battery
+  (`sysctl` / `pmset` / `ioreg`), APFS local snapshots (`tmutil`), Time
+  Machine readiness (`tmutil destinationinfo`), crash frequency
+  (`~/Library/Logs/DiagnosticReports`), write rate (`iostat`), and SMART for
+  external drives.
+- `ssdwtf/analyze.py` — turns a report + history into severity-ranked
+  findings, plus a status for each of the eight domains shown above the
+  findings: drive, backup, headroom, memory, processes, state, stability,
+  telemetry (`ok` / `warn` / `critical`, or `unknown` when a domain's
+  collectors returned no data — absence of data is never reported as `ok`).
 - `ssdwtf/history.py` — JSONL scan history for trend and growth-rate analysis.
+- `ssdwtf/metrics.py` — sqlite baseline store
+  (`~/.local/share/ssdwtf/metrics.db`); every scan/watch pass records its
+  metrics there alongside the JSONL history.
 - `ssdwtf/alerts.py` — Notification Center via `osascript`, with per-finding
   cooldown so it doesn't nag.
 - `ssdwtf/cleaners.py` — guarded, dry-run-first cleanup targets.
