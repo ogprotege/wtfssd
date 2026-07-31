@@ -355,5 +355,53 @@ class TestPhase2Findings(unittest.TestCase):
             self.assertEqual(ev[0].evidence, "derived")
 
 
+class TestPhase3Pressure(unittest.TestCase):
+    def test_pressure_warn_falls_back_without_metrics(self):
+        rep = _base_report()
+        rep.pressure = models.PressureReport(available=True, level=2,
+                                             free_pct=15.0)
+        codes = {f.code for f in analyze.analyze(rep, [], dict(DEFAULTS))}
+        self.assertIn("pressure.warn", codes)
+
+    def test_pressure_warn_suppressed_when_not_sustained(self):
+        import tempfile
+        from pathlib import Path as P
+        from ssdwtf import metrics as metrics_mod
+        rep = _base_report()
+        rep.pressure = models.PressureReport(available=True, level=2)
+        with tempfile.TemporaryDirectory() as td:
+            db = P(td) / "m.db"
+            # 4 samples: only 1 at level >= 2 → not sustained → no warn
+            from datetime import datetime, timedelta
+            for i, lvl in enumerate([1, 1, 1, 2]):
+                ts = (datetime.now() - timedelta(minutes=4 - i)).isoformat(
+                    timespec="seconds")
+                r = models.make_empty_report(ts, 64.0)
+                r.pressure = models.PressureReport(available=True, level=lvl)
+                metrics_mod.record(r, path=db)
+            codes = {f.code for f in analyze.analyze(
+                rep, [], dict(DEFAULTS), metrics_path=db)}
+            self.assertNotIn("pressure.warn", codes)
+
+    def test_pressure_warn_fires_when_sustained(self):
+        import tempfile
+        from pathlib import Path as P
+        from ssdwtf import metrics as metrics_mod
+        rep = _base_report()
+        rep.pressure = models.PressureReport(available=True, level=2)
+        with tempfile.TemporaryDirectory() as td:
+            db = P(td) / "m.db"
+            from datetime import datetime, timedelta
+            for i in range(4):
+                ts = (datetime.now() - timedelta(minutes=4 - i)).isoformat(
+                    timespec="seconds")
+                r = models.make_empty_report(ts, 64.0)
+                r.pressure = models.PressureReport(available=True, level=2)
+                metrics_mod.record(r, path=db)
+            codes = {f.code for f in analyze.analyze(
+                rep, [], dict(DEFAULTS), metrics_path=db)}
+            self.assertIn("pressure.warn", codes)
+
+
 if __name__ == "__main__":
     unittest.main()

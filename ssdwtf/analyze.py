@@ -218,11 +218,21 @@ def analyze(report: HealthReport, history: list[HealthReport],
                 "The kernel is under extreme memory pressure; Apple Silicon masks it as silent thrashing.",
                 "Quit memory-heavy apps; check ghost processes below."))
         elif pr.level >= 2:
-            findings.append(_f("monitor", "warn", "pressure.warn",
-                "Memory pressure elevated",
-                f"Pressure level {pr.level} with {pr.free_pct:.0f}% free"
-                if pr.free_pct is not None else f"Pressure level {pr.level}",
-                "Watch for swap growth; consider closing unused IDE windows."))
+            sustained = True  # fallback: no metrics → point-in-time (Phase-1 behavior)
+            if metrics_path is not None:
+                samples = metrics.series(
+                    "pressure.level",
+                    days=config.get("pressure", {}).get("sustained_min", 10) / 1440.0,
+                    path=metrics_path)
+                if len(samples) >= 2:
+                    sustained = (sum(1 for _, v in samples if v >= 2)
+                                 / len(samples)) >= 0.5
+            if sustained:
+                findings.append(_f("monitor", "warn", "pressure.warn",
+                    "Memory pressure elevated (sustained)",
+                    f"Pressure level {pr.level} with {pr.free_pct:.0f}% free"
+                    if pr.free_pct is not None else f"Pressure level {pr.level}",
+                    "Watch for swap growth; consider closing unused IDE windows."))
 
     # --- Swap trend (derived from history) + thrash hint + restart hint ---
     swap_rate = _swap_rate_gb_day(history)
@@ -467,8 +477,10 @@ def grade(score: int) -> str:
     return "F"
 
 
-def _swap_rate_gb_day(history: list[HealthReport]) -> float | None:
-    """Least-squares slope of swap used (GB/day) across history entries."""
+def _swap_rate_gb_day(history: list[HealthReport],
+                      window_days: float = 14.0) -> float | None:
+    """Least-squares slope of swap used (GB/day), trailing window only."""
+    cutoff = datetime.now().timestamp() - window_days * 86400.0
     pts: list[tuple[float, float]] = []
     for r in history:
         if r.swap is None:
@@ -476,6 +488,8 @@ def _swap_rate_gb_day(history: list[HealthReport]) -> float | None:
         try:
             t = datetime.fromisoformat(r.timestamp).timestamp() / 86400.0
         except ValueError:
+            continue
+        if t * 86400.0 < cutoff:
             continue
         pts.append((t, r.swap.used_mb / 1024))
     if len(pts) < 2:
