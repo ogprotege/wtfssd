@@ -5,3 +5,6 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+IDEA-SSD.txt
+My-tool-mon_ideas.txt
+WIP.md
