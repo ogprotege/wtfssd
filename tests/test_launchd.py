@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -49,6 +50,28 @@ class TestLaunchd(unittest.TestCase):
             rep = launchd.collect_launchd(home=home, state_path=home / "b.json",
                                           system_dirs=(sysd,))
             self.assertEqual(rep.agent_count, 1)
+
+    def test_own_agents_excluded(self):
+        # ssdwtf never alerts on its own LaunchAgents: they are not counted,
+        # never reported as new, and never stored in the baseline.
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td)
+            agents = home / "Library/LaunchAgents"
+            _mk(agents, "com.a.plist")
+            _mk(agents, "com.ssdwtf.watch.plist")
+            _mk(agents, "com.ssdwtf.watch.fast.plist")
+            state = home / "b.json"
+            rep = launchd.collect_launchd(home=home, state_path=state,
+                                          system_dirs=())
+            self.assertEqual(rep.agent_count, 1)
+            self.assertEqual(rep.new_since_baseline, [])
+            stored = set(json.loads(state.read_text())["names"])
+            self.assertEqual(stored, {"com.a.plist"})
+            # own agents added after a baseline exist are still invisible
+            rep2 = launchd.collect_launchd(home=home, state_path=state,
+                                           system_dirs=())
+            self.assertEqual(rep2.agent_count, 1)
+            self.assertEqual(rep2.new_since_baseline, [])
 
 
 if __name__ == "__main__":

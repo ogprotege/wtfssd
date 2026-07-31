@@ -8,6 +8,9 @@ from ..config import data_dir as default_data_dir
 from ..models import LaunchdReport
 
 _SYSTEM_DIRS = (Path("/Library/LaunchAgents"), Path("/Library/LaunchDaemons"))
+# The tool's own LaunchAgents (installed by `optimize install-agent`) must
+# never be reported as new — ssdwtf does not alert on itself.
+_SELF_PREFIX = "com.ssdwtf."
 
 
 def collect_launchd(home: Optional[Path] = None,
@@ -27,6 +30,7 @@ def collect_launchd(home: Optional[Path] = None,
                              if p.name.endswith(".plist"))
         except OSError:
             continue
+    names = {n for n in names if not n.startswith(_SELF_PREFIX)}
 
     baseline_exists = state_path.exists()
     previous: set[str] = set()
