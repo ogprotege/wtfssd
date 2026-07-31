@@ -108,7 +108,7 @@ Maps 1:1 to the article's symptom map:
 
 | Article mechanism | Collector | Default threshold (config key) |
 |---|---|---|
-| SSD wear | `smartctl` Percentage Used, Available Spare, Media/Data errors, Power-On Hours, Data Units Written → TB | warn if media_errors > 0; critical if available_spare < 100 or health != PASSED (`smart.*`) |
+| SSD wear | `smartctl` Percentage Used, Available Spare, Media/Data errors, Power-On Hours, Data Units Written → TB | critical if media_errors > 0; critical if NVMe Critical Warning ≠ 0, or available_spare below the device-reported threshold (see the monitor-expansion spec) or health != PASSED (`smart.*`) |
 | Swap pressure | `sysctl vm.swapusage` | warn ≥ 8 GB used, critical ≥ 16 GB (`swap.warn_gb`, `swap.crit_gb`) |
 | Headroom | `df` on data volume | warn < 15% free, critical < 10% (`disk.warn_free_pct`, `disk.crit_free_pct`) |
 | Ghost processes | `ps` — processes whose name matches IDE patterns (Cursor, Code, Claude, Windsurf, Zed, Electron helpers) with age > `procs.ghost_days` (3 d) or total count > `procs.warn_count` (20) | warn |
@@ -176,13 +176,17 @@ Targets (each: id, title, paths, risk level, owner-app guard, notes):
 ## 5. CLI Surface
 
 ```
-ssdwtf scan [--json] [--no-history]          full health report; appends to history by default
-ssdwtf watch [--once] [--interval N]         monitor loop (or single pass) + alerts
+ssdwtf scan [--json] [--no-history] [--fast]   full health report; appends to history by default
+ssdwtf watch [--once] [--interval N] [--fast]  monitor loop (or single pass) + alerts
 ssdwtf clean [target …] [--apply] [--hard] [--force] [--json]
 ssdwtf optimize ignore [path …] | headroom | install-agent | uninstall-agent
 ssdwtf history [--last N] [--json]           trend table: TB written, % used, free space, swap
 ssdwtf config --show | --path                effective config
 ```
+
+`scan` and `watch` accept `--fast`: fast tier only — skips the slow collectors
+(state-dir sizing, APFS snapshots, backup readiness, crash logs). See the
+monitor-expansion spec for the tier split.
 
 Exit codes: 0 ok / no findings; 1 warnings only; 2 any critical; 3 usage/internal error.
 `scan` exits 1/2 so it can drive `watch` and cron-style alerting.

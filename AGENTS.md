@@ -12,7 +12,7 @@ tests green, live-verified on macOS). The full package source under
 `ssdwtf/` is present and authoritative, alongside:
 
 - `pyproject.toml`, `README.md`, `LICENSE` — packaging, docs
-- `tests/` — the complete test suite (15 files, 81 tests)
+- `tests/` — the complete test suite (23 files, 141 tests)
   plus captured command-output fixtures in `tests/fixtures/`
 - `docs/superpowers/specs/2026-07-30-ssdwtf-design.md` — the design spec
 - `docs/superpowers/plans/2026-07-30-ssdwtf.md` — the implementation plan
@@ -107,8 +107,16 @@ ssdwtf/
     disk.py              # df -k /System/Volumes/Data → DiskReport
     processes.py         # ps → ghost IDE helpers → ProcessReport
     statedirs.py         # known state dirs, state.vscdb sizes → StateDirReport
+    pressure.py          # memory pressure: sysctl level + memory_pressure free-% → PressureReport
+    system.py            # uptime (kern.boottime), pmset throttle, ioreg battery → SystemReport
+    apfs.py              # tmutil local snapshots + diskutil container free → ApfsReport
+    backup.py            # tmutil destinationinfo/latestbackup → BackupReport (Time Machine readiness)
+    crashes.py           # DiagnosticReports per watched app, trailing 7 days → CrashReport
+    writerate.py         # iostat -d current-interval MB/s → WriteRateReport
+    smartext.py          # SMART for external drives, bridge protocols in order → SmartReport
   analyze.py             # reports + config + history → list[Finding] + health score 0–100
   history.py             # JSONL scan history; trend / growth-rate analysis
+  metrics.py             # sqlite metrics baseline (~/.local/share/ssdwtf/metrics.db)
   alerts.py              # Finding → osascript notification; cooldown state file
   cleaners.py            # CleanupTarget registry + dry-run/apply engine
   optimize.py            # .cursorignore writer, LaunchAgent plist install/uninstall
@@ -119,8 +127,11 @@ tests/
 ```
 
 Data flow: collectors → `models.HealthReport` → `analyze` → `[Finding]` +
-score → `report` (text | json); `history.append` and `alerts.notify` branch
-off the same findings. `cleaners` sizes targets from collectors then dry-runs
+score → `report` (text | json); `history.append`, `metrics.record`, and
+`alerts.notify` branch off the same findings — every scan/watch pass appends
+JSONL history AND records metrics to `~/.local/share/ssdwtf/metrics.db`
+(`scan --no-history` does neither).
+`cleaners` sizes targets from collectors then dry-runs
 or Trashes; `optimize` writes ignore files / LaunchAgent plists.
 
 ## Code style guidelines
@@ -153,8 +164,8 @@ These are contractual, from the implementation plan's global constraints:
 - Filesystem-touching tests (cleaners, optimize, history, config) run against
   `tempfile.TemporaryDirectory` and fakes; `cli` tests use `unittest.mock` to
   patch `build_report`, `analyze`, history, and config paths.
-- The suite is **81 tests, all passing** (verified after the 2026-07-30
-  restoration).
+- The suite is **141 tests, all passing** (verified after the Phase 1
+  monitor expansion).
 
 ## Configuration and runtime state
 
@@ -162,11 +173,16 @@ These are contractual, from the implementation plan's global constraints:
   defaults; only set keys are overridden. Inspect with `ssdwtf config --show`
   (path: `ssdwtf config --path`). Useful keys: `swap.warn_gb`, `swap.crit_gb`,
   `disk.warn_free_pct`, `procs.ghost_days`, `state.vscdb_warn_gb`,
-  `smart.device`, `alerts.cooldown_hours`, `watch.interval_minutes`,
-  `projects` (dirs scanned for stale `node_modules`).
+  `smart.device`, `smart.external_devices`, `alerts.cooldown_hours`,
+  `watch.interval_minutes`, `projects` (dirs scanned for stale
+  `node_modules`), `tiers.fast`/`tiers.slow` (collector split behind
+  `scan --fast`), `backup.enabled`/`backup.warn_hours`/`backup.crit_hours`,
+  `apfs.snapshot_warn_days`, `pressure.sustained_min`,
+  `crashes.warn_weekly`/`crashes.apps`, `thermal.warn_below`,
+  `uptime.warn_days`, `writerate.warn_mb_s`, `battery.capacity_info_pct`.
 - Runtime state (the only writes monitoring makes):
-  `~/.local/share/ssdwtf/` — `history.jsonl`, `alert_state.json`,
-  `backups/`. Both exist on the development machine.
+  `~/.local/share/ssdwtf/` — `history.jsonl`, `metrics.db`,
+  `alert_state.json`, `backups/`. Both exist on the development machine.
 
 ## Safety model (security considerations)
 

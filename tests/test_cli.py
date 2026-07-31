@@ -23,6 +23,7 @@ class TestCli(unittest.TestCase):
              mock.patch("ssdwtf.analyze.analyze", return_value=findings), \
              mock.patch("ssdwtf.history.append_history"), \
              mock.patch("ssdwtf.history.load_history", return_value=[]), \
+             mock.patch("ssdwtf.metrics.record"), \
              mock.patch("ssdwtf.config.data_dir", return_value=Path(td)), \
              redirect_stdout(buf):
             code = cli.main(argv)
@@ -41,6 +42,35 @@ class TestCli(unittest.TestCase):
         self.assertEqual(code, 1)
         code, _ = self._scan(["scan"], fake_report(), [warn, crit], None)
         self.assertEqual(code, 2)
+
+    def test_scan_fast_skips_slow_collectors(self):
+        with mock.patch.object(cli.statedirs_col, "collect_statedirs") as m_sd, \
+             mock.patch.object(cli.apfs_col, "collect_apfs") as m_ap, \
+             mock.patch.object(cli.backup_col, "collect_backup") as m_bu, \
+             mock.patch.object(cli.crashes_col, "collect_crashes") as m_cr, \
+             mock.patch.object(cli.smart_col, "collect_smart") as m_sm, \
+             mock.patch.object(cli.swap_col, "collect_swap", return_value=None), \
+             mock.patch.object(cli.disk_col, "collect_disk", return_value=None), \
+             mock.patch.object(cli.proc_col, "collect_processes") as m_pr, \
+             mock.patch.object(cli.pressure_col, "collect_pressure") as m_prs, \
+             mock.patch.object(cli.system_col, "collect_system") as m_sys, \
+             mock.patch.object(cli.writerate_col, "collect_writerate") as m_wr, \
+             mock.patch.object(cli, "host_ram_gb", return_value=64.0), \
+             mock.patch.object(cli.history, "append_history"), \
+             mock.patch.object(cli.history, "load_history", return_value=[]), \
+             mock.patch.object(cli.metrics, "record"), \
+             redirect_stdout(io.StringIO()):
+            m_sm.return_value = models.SmartReport(available=False, error="x")
+            m_pr.return_value = models.ProcessReport()
+            m_prs.return_value = models.PressureReport(available=False)
+            m_sys.return_value = models.SystemReport(available=False)
+            m_wr.return_value = models.WriteRateReport(available=False)
+            code = cli.main(["scan", "--fast", "--json"])
+            self.assertIn(code, (0, 1, 2))
+            m_sd.assert_not_called()
+            m_ap.assert_not_called()
+            m_bu.assert_not_called()
+            m_cr.assert_not_called()
 
     def test_clean_dry_run_lists_targets(self):
         with tempfile.TemporaryDirectory() as td, \

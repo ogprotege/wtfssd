@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from .analyze import grade, health_score
+from .analyze import domain_statuses as analyze_domain_statuses, grade, health_score
 from .models import Finding, HealthReport, report_to_dict
 
 _UNITS = ("B", "KB", "MB", "GB", "TB", "PB")
@@ -21,8 +21,19 @@ def _bar(rep: HealthReport) -> str:
     return (f"ssdwtf scan — {rep.timestamp} · host RAM {rep.host_ram_gb:.0f} GB")
 
 
+def domain_table(domains: dict[str, str]) -> list[str]:
+    lines = ["== DOMAINS =="]
+    for name, status in domains.items():
+        marker = {"ok": "ok", "warn": "WARN", "critical": "CRIT",
+                  "unknown": " ? "}.get(status, status)
+        lines.append(f"  [{marker:>4}] {name}")
+    return lines
+
+
 def render_text(report: HealthReport, findings: list[Finding]) -> str:
     lines: list[str] = [_bar(report), ""]
+    lines.extend(domain_table(analyze_domain_statuses(findings, report)))
+    lines.append("")
 
     lines.append("== SSD / SMART ==")
     smart = report.smart
@@ -87,7 +98,8 @@ def render_text(report: HealthReport, findings: list[Finding]) -> str:
         lines.append("  none — machine looks healthy")
     order = {"critical": 0, "warn": 1, "info": 2}
     for f in sorted(findings, key=lambda f: order.get(f.severity, 3)):
-        lines.append(f"  [{f.severity.upper()}] {f.title}")
+        ev = f" (evidence: {f.evidence})" if f.evidence != "measured" else ""
+        lines.append(f"  [{f.severity.upper()}] {f.title}{ev}")
         lines.append(f"      {f.detail}")
         lines.append(f"      → {f.recommendation}")
     lines.append("")
@@ -104,11 +116,12 @@ def render_json(report: HealthReport, findings: list[Finding]) -> str:
         "findings": [
             {"pillar": f.pillar, "severity": f.severity, "code": f.code,
              "title": f.title, "detail": f.detail,
-             "recommendation": f.recommendation}
+             "recommendation": f.recommendation, "evidence": f.evidence}
             for f in findings
         ],
         "score": score,
         "grade": grade(score),
+        "domains": analyze_domain_statuses(findings, report),
     }
     return json.dumps(payload, indent=2)
 
