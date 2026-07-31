@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from datetime import datetime, timedelta
@@ -82,6 +83,59 @@ class TestAlerts(unittest.TestCase):
             return None
         f = finding("warn", "x")
         self.assertFalse(alerts._osascript_notify(f, failing_runner))
+
+
+    def test_escalation_notifies_inside_cooldown(self):
+        with tempfile.TemporaryDirectory() as td:
+            cfg = {"alerts": {"enabled": True, "cooldown_hours": 24.0,
+                              "cooldown_critical_hours": 4.0}}
+            sent = []
+            now = datetime.now()
+            warn = models.Finding(pillar="monitor", severity="warn",
+                                  code="x.y", title="t", detail="d",
+                                  recommendation="r")
+            crit = models.Finding(pillar="monitor", severity="critical",
+                                  code="x.y", title="t", detail="d",
+                                  recommendation="r")
+            alerts.alert([warn], cfg, state_dir=Path(td),
+                         notifier=lambda f: sent.append(f) or True, now=now)
+            # escalation warn→critical 1h later: notifies despite cooldown
+            got = alerts.alert([crit], cfg, state_dir=Path(td),
+                               notifier=lambda f: sent.append(f) or True,
+                               now=now + timedelta(hours=1))
+            self.assertEqual(len(got), 1)
+            self.assertEqual(len(sent), 2)
+
+    def test_critical_cooldown_shorter_than_warn(self):
+        with tempfile.TemporaryDirectory() as td:
+            cfg = {"alerts": {"enabled": True, "cooldown_hours": 24.0,
+                              "cooldown_critical_hours": 4.0}}
+            now = datetime.now()
+            crit = models.Finding(pillar="monitor", severity="critical",
+                                  code="x.y", title="t", detail="d",
+                                  recommendation="r")
+            ok = lambda f: True
+            alerts.alert([crit], cfg, state_dir=Path(td), notifier=ok, now=now)
+            # 5h later: critical cooldown (4h) elapsed → notifies again
+            got = alerts.alert([crit], cfg, state_dir=Path(td), notifier=ok,
+                               now=now + timedelta(hours=5))
+            self.assertEqual(len(got), 1)
+            # 1h after that: still inside → silent
+            got = alerts.alert([crit], cfg, state_dir=Path(td), notifier=ok,
+                               now=now + timedelta(hours=6))
+            self.assertEqual(got, [])
+
+    def test_legacy_state_format_tolerated(self):
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "alert_state.json").write_text(
+                json.dumps({"x.y": datetime.now().isoformat()}))
+            cfg = {"alerts": {"enabled": True, "cooldown_hours": 24.0}}
+            warn = models.Finding(pillar="monitor", severity="warn",
+                                  code="x.y", title="t", detail="d",
+                                  recommendation="r")
+            got = alerts.alert([warn], cfg, state_dir=Path(td),
+                               notifier=lambda f: True)
+            self.assertEqual(got, [])  # legacy ts honored as cooldown
 
 
 if __name__ == "__main__":
