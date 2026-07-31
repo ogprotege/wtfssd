@@ -236,5 +236,124 @@ class TestPhase1Findings(unittest.TestCase):
         self.assertEqual(ev["uptime.restart_hint"], "inferred")
 
 
+class TestPhase2Findings(unittest.TestCase):
+    def _analyze(self, rep, cfg=None, metrics_path=None):
+        return analyze.analyze(rep, [], cfg or dict(DEFAULTS),
+                               metrics_path=metrics_path)
+
+    def test_churn_finding(self):
+        rep = _base_report()
+        rep.churn = models.ChurnReport(available=True, added=15, removed=10,
+                                       pack_count=100, pack_bytes=int(2e9))
+        self.assertIn("state.churn",
+                      {f.code for f in self._analyze(rep)})
+
+    def test_churn_quiet_on_baseline_run(self):
+        rep = _base_report()
+        rep.churn = models.ChurnReport(available=True, added=0, removed=0,
+                                       note="baseline stored")
+        self.assertNotIn("state.churn",
+                         {f.code for f in self._analyze(rep)})
+
+    def test_fds_finding(self):
+        rep = _base_report()
+        rep.fds = models.FdsReport(available=True,
+                                   per_app={"cursor": 5000},
+                                   max_pid=1, max_name="Cursor", max_count=5000)
+        self.assertIn("procs.fds", {f.code for f in self._analyze(rep)})
+
+    def test_mcp_orphan_and_dead(self):
+        rep = _base_report()
+        rep.mcp = models.MCPReport(
+            available=True, claude_running=False,
+            servers=[models.MCPServer(name="fc", command="node x",
+                                      live_pids=1)])
+        self.assertIn("mcp.orphan", {f.code for f in self._analyze(rep)})
+        rep.mcp = models.MCPReport(
+            available=True, claude_running=True,
+            servers=[models.MCPServer(name="fc", command="node x",
+                                      live_pids=0)])
+        self.assertIn("mcp.dead", {f.code for f in self._analyze(rep)})
+
+    def test_secrets_never_without_enable(self):
+        rep = _base_report()
+        rep.secrets = models.SecretsReport(
+            available=True, enabled=False,
+            matches=[models.SecretMatch(path="/f", line=1, rule="x")])
+        self.assertNotIn("secrets.exposed",
+                         {f.code for f in self._analyze(rep)})
+        rep.secrets = models.SecretsReport(
+            available=True, enabled=True,
+            matches=[models.SecretMatch(path="/f", line=1, rule="aws-access-key")])
+        self.assertIn("secrets.exposed",
+                      {f.code for f in self._analyze(rep)})
+
+    def test_retention_launchd_spotlight(self):
+        rep = _base_report()
+        rep.retention = models.RetentionReport(
+            available=True,
+            tools=[models.RetentionEntry(tool="cursor", setting="x",
+                                         status="absent")])
+        rep.launchd = models.LaunchdReport(
+            available=True, new_since_baseline=["com.evil.plist"])
+        rep.spotlight = models.SpotlightReport(available=True,
+                                               mds_cpu_pct=137.5)
+        codes = {f.code for f in self._analyze(rep)}
+        self.assertIn("retention.missing", codes)
+        self.assertIn("launchd.new", codes)
+        self.assertIn("spotlight.storm", codes)
+
+    def test_work_findings(self):
+        rep = _base_report()
+        rep.gitwatch = models.GitWatchReport(available=True, repos=[
+            models.RepoStatus(path="/a", has_remote=False),
+            models.RepoStatus(path="/b", uncommitted=40, untracked=20,
+                              unpushed=15),
+        ])
+        codes = {f.code for f in self._analyze(rep)}
+        self.assertIn("work.no_remote", codes)
+        self.assertIn("work.uncommitted", codes)
+        self.assertIn("work.unpushed", codes)
+
+    def test_domains_now_ten(self):
+        rep = _base_report()
+        findings = self._analyze(rep)
+        dom = analyze.domain_statuses(findings, rep)
+        self.assertEqual(len(dom), 10)
+        self.assertIn("privacy", dom)
+        self.assertIn("work", dom)
+
+    def test_procs_leak_with_metrics(self):
+        import tempfile
+        from datetime import datetime, timedelta
+        from pathlib import Path as P
+        from ssdwtf import metrics as metrics_mod
+        rep = _base_report()
+        rep.processes = models.ProcessReport(ide_procs=[
+            models.GhostProcess(pid=42, ppid=1, name="Cursor Helper",
+                                age_seconds=100000, rss_mb=9000.0)])
+        with tempfile.TemporaryDirectory() as td:
+            db = P(td) / "m.db"
+            # fabricate a rising RSS series: +4.8 GB/day = 200 MB/h
+            # (now-relative: analyze queries a trailing window of
+            # leak_window_h*4/24 = 1 day, so fixed dates would age out;
+            # 1000→3000→5000 MB over 20 h is exactly 4.8 GB/day)
+            now = datetime.now()
+            for i, hours_ago in enumerate((20, 10, 0)):
+                ts = (now - timedelta(hours=hours_ago)).isoformat(
+                    timespec="seconds")
+                r = models.make_empty_report(ts, 64.0)
+                r.processes = models.ProcessReport(ide_procs=[
+                    models.GhostProcess(pid=42, ppid=1, name="Cursor Helper",
+                                        age_seconds=1,
+                                        rss_mb=1000.0 + 2000.0 * i)])
+                metrics_mod.record(r, path=db)
+            codes = {f.code for f in self._analyze(rep, metrics_path=db)}
+            self.assertIn("procs.leak", codes)
+            ev = [f for f in self._analyze(rep, metrics_path=db)
+                  if f.code == "procs.leak"]
+            self.assertEqual(ev[0].evidence, "derived")
+
+
 if __name__ == "__main__":
     unittest.main()

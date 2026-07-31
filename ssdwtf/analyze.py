@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from . import metrics
 from .collectors.statedirs import vscdb_size_bytes
 from .history import gb_written_per_day, state_growth_gb_per_day
 from .models import Finding, HealthReport
@@ -9,7 +10,8 @@ from .models import Finding, HealthReport
 GB = 1e9
 
 DOMAINS: tuple[str, ...] = ("drive", "backup", "headroom", "memory",
-                            "processes", "state", "stability", "telemetry")
+                            "processes", "state", "stability", "telemetry",
+                            "privacy", "work")
 
 _DOMAIN_BY_PREFIX = {
     "smart.": "drive",
@@ -20,6 +22,11 @@ _DOMAIN_BY_PREFIX = {
     "state.": "state",
     "crashes.": "stability", "thermal.": "stability", "uptime.": "stability",
     "writerate.": "telemetry", "battery.": "telemetry",
+    "secrets.": "privacy", "retention.": "privacy",
+    "work.": "work",
+    "mcp.": "processes",
+    "logs.": "state",
+    "launchd.": "stability", "spotlight.": "stability",
 }
 
 
@@ -32,7 +39,7 @@ def _f(pillar: str, severity: str, code: str, title: str,
 
 
 def analyze(report: HealthReport, history: list[HealthReport],
-            config: dict) -> list[Finding]:
+            config: dict, metrics_path=None) -> list[Finding]:
     findings: list[Finding] = []
     cfg_smart = config["smart"]
     cfg_swap = config["swap"]
@@ -288,6 +295,153 @@ def analyze(report: HealthReport, history: list[HealthReport],
                 f"critical warning 0x{(ext.critical_warning or 0):02x}",
                 "This is your archive — verify backups and replace the drive."))
 
+    # --- RSS leak slopes (derived from per-PID metrics history) ---
+    cfg_procs2 = config.get("procs", {})
+    if metrics_path is not None and report.processes.ide_procs:
+        window_days = cfg_procs2.get("leak_window_h", 6) / 24.0
+        threshold = cfg_procs2.get("leak_warn_mb_h", 100)
+        leakers: list[tuple[str, int, float]] = []
+        for proc in report.processes.ide_procs[:10]:
+            rate = metrics.rate_per_day(f"procs.rss.{proc.pid}",
+                                        days=window_days * 4,
+                                        path=metrics_path)
+            if rate is None:
+                continue
+            mb_per_h = rate / 24.0
+            if mb_per_h >= threshold:
+                leakers.append((proc.name, proc.pid, mb_per_h))
+        if leakers:
+            name, pid, slope = max(leakers, key=lambda t: t[2])
+            findings.append(_f("monitor", "warn", "procs.leak",
+                f"{len(leakers)} leaking process(es), worst: {name} +{slope:.0f} MB/h",
+                f"pid {pid} keeps growing after its window should be idle — the 4.16 GB-per-closed-window pattern.",
+                "Cmd+Q the owning app; if it returns, report it upstream.",
+                evidence="derived"))
+
+    # --- Snapshot churn ---
+    ch = report.churn
+    cfg_ch = config.get("churn", {})
+    if ch.available and ch.note is None:
+        turnover = ch.added + ch.removed
+        size_burst = ch.added_bytes >= cfg_ch.get("warn_gb", 5) * 1e9
+        if turnover >= cfg_ch.get("warn_turnover", 20) or size_burst:
+            findings.append(_f("clean", "warn", "state.churn",
+                f"Snapshot churn: +{ch.added} −{ch.removed} .pack files since last scan",
+                f"{ch.pack_count} packs, {ch.pack_bytes / 1e9:.1f} GB now, +{ch.added_bytes / 1e9:.1f} GB new. Create-destroy churn is write volume that never shows as missing space.",
+                "Constrain the indexer: `ssdwtf optimize ignore` in each project root."))
+
+    # --- File descriptors ---
+    fd = report.fds
+    cfg_fd = config.get("fds", {})
+    if fd.available:
+        limit = cfg_fd.get("warn_count", 4000)
+        worst = [(app, n) for app, n in fd.per_app.items() if n >= limit]
+        if worst:
+            app, n = max(worst, key=lambda t: t[1])
+            findings.append(_f("monitor", "warn", "procs.fds",
+                f"{app} holds {n} open file descriptors",
+                f"Worst single pid: {fd.max_name} ({fd.max_pid}) with {fd.max_count}. fd exhaustion causes the mysterious mid-run crash.",
+                "Restart the offending app; check for file-watcher loops."))
+
+    # --- MCP fleet ---
+    mc = report.mcp
+    if mc.available:
+        orphans = [s for s in mc.servers
+                   if s.live_pids > 0 and not mc.claude_running]
+        if orphans:
+            names = ", ".join(s.name for s in orphans[:5])
+            findings.append(_f("monitor", "warn", "mcp.orphan",
+                f"{len(orphans)} MCP server(s) alive but Claude is not running: {names}",
+                "Orphaned stdio servers are structurally the same leak as ghost IDE helpers.",
+                "Kill the pids or restart Claude so it reaps them."))
+        elif mc.claude_running:
+            dead = [s for s in mc.servers if s.live_pids == 0]
+            if dead:
+                findings.append(_f("monitor", "info", "mcp.dead",
+                    f"{len(dead)} configured MCP server(s) have no live process",
+                    ", ".join(s.name for s in dead[:5]),
+                    "Check Claude Desktop's MCP logs if you expected them."))
+
+    # --- Secrets (opt-in) ---
+    se = report.secrets
+    if se.available and se.enabled and se.matches:
+        by_rule: dict[str, int] = {}
+        for m in se.matches:
+            by_rule[m.rule] = by_rule.get(m.rule, 0) + 1
+        top = ", ".join(f"{r}×{n}" for r, n in
+                        sorted(by_rule.items(), key=lambda t: -t[1])[:3])
+        findings.append(_f("monitor", "warn", "secrets.exposed",
+            f"{len(se.matches)} credential pattern(s) at rest in agent state ({top})",
+            f"Example location: {se.matches[0].path}:{se.matches[0].line}. Values are never displayed or stored by ssdwtf.",
+            "Rotate the exposed keys; move secrets to env vars or a manager."))
+
+    # --- Retention posture ---
+    rt = report.retention
+    if rt.available:
+        missing = [t.tool for t in rt.tools if t.status == "absent"]
+        if missing:
+            findings.append(_f("optimize", "info", "retention.missing",
+                f"No retention/cleanup setting found for: {', '.join(missing)}",
+                "Tools without lifecycle controls accumulate unbounded state.",
+                "Set cleanupPeriodDays where supported; audit the rest monthly."))
+
+    # --- launchd persistence ---
+    ld = report.launchd
+    if ld.available and ld.new_since_baseline:
+        findings.append(_f("monitor", "warn", "launchd.new",
+            f"{len(ld.new_since_baseline)} new LaunchAgent/Daemon(s) installed",
+            ", ".join(ld.new_since_baseline[:5]) + " — ghosts that survive Cmd+Q usually survive because something relaunches them.",
+            "Inspect: `launchctl list | grep <name>`; remove if unwanted."))
+
+    # --- Spotlight ---
+    sp = report.spotlight
+    cfg_sp = config.get("spotlight", {})
+    if (sp.available and sp.mds_cpu_pct is not None
+            and sp.mds_cpu_pct >= cfg_sp.get("warn_cpu_pct", 50)):
+        findings.append(_f("monitor", "warn", "spotlight.storm",
+            f"Spotlight indexing at {sp.mds_cpu_pct:.0f}% CPU",
+            "Agents creating thousands of files trigger mds reindexing storms — a distinct write/CPU source.",
+            "Consider Spotlight privacy exclusions for agent workspace dirs."))
+
+    # --- Log growth (derived) ---
+    cfg_logs = config.get("logs", {})
+    if metrics_path is not None and report.logs.available:
+        rate = metrics.rate_per_day("logs.total_gb",
+                                    days=7, path=metrics_path)
+        if rate is not None and rate >= cfg_logs.get("warn_gb_day", 0.5):
+            findings.append(_f("clean", "warn", "logs.growth",
+                f"Logs growing ~{rate:.1f} GB/day",
+                "Verbose MCP servers and unified logging quietly write gigabytes.",
+                "Check the top log dirs in the scan; quiet the noisiest tool.",
+                evidence="derived"))
+
+    # --- Work-loss protection ---
+    gw = report.gitwatch
+    cfg_git = config.get("git", {})
+    if gw.available:
+        no_remote = [r for r in gw.repos if r.error is None and not r.has_remote]
+        if no_remote:
+            findings.append(_f("monitor", "warn", "work.no_remote",
+                f"{len(no_remote)} repo(s) have no remote configured",
+                ", ".join(r.path for r in no_remote[:3]) + " — no off-machine copy exists.",
+                "Add a remote and push, or confirm the repo is covered by backup."))
+        dirty = [r for r in gw.repos if r.error is None
+                 and r.uncommitted + r.untracked >= cfg_git.get("warn_changes", 50)]
+        if dirty:
+            r = max(dirty, key=lambda r: r.uncommitted + r.untracked)
+            findings.append(_f("monitor", "warn", "work.uncommitted",
+                f"{r.path}: {r.uncommitted} changed + {r.untracked} untracked files",
+                "Large uncommitted work is one agent mistake away from loss.",
+                "Commit or stash; ssdwtf will never push for you."))
+        unpushed = [r for r in gw.repos if r.error is None
+                    and r.unpushed >= cfg_git.get("warn_unpushed", 10)]
+        if unpushed:
+            r = max(unpushed, key=lambda r: r.unpushed)
+            findings.append(_f("monitor", "warn", "work.unpushed",
+                f"{r.path}: {r.unpushed} commits not on any remote",
+                "Local-only commits are single-point-of-failure work.",
+                "Push when ready; ssdwtf only reports."))
+
     return findings
 
 
@@ -349,6 +503,8 @@ def domain_statuses(findings: list[Finding],
         "state": bool(report.statedirs.dirs),
         "stability": report.crashes.available or report.system.available,
         "telemetry": report.writerate.available or report.system.available,
+        "privacy": report.secrets.available or report.retention.available,
+        "work": report.gitwatch.available,
     }
     rank = {"ok": 0, "warn": 1, "critical": 2}
     out: dict[str, str] = {}

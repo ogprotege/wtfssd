@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from .config import data_dir as default_data_dir
@@ -63,14 +63,26 @@ def gb_written_per_day(history: list[HealthReport]) -> float | None:
     return delta * 512_000 / 1e9 / days
 
 
-def state_growth_gb_per_day(history: list[HealthReport]) -> float | None:
+def state_growth_gb_per_day(history: list[HealthReport],
+                            window_days: float = 14.0) -> float | None:
     # skip rows where statedirs was not collected (e.g. scan --fast placeholders
     # with total_bytes=0) — a 0 at the window start would inflate the delta
     usable = [r for r in history if not r.statedirs.note]
-    if len(usable) < 2:
+    # cap the fit to the trailing window so a one-time step (e.g. new state
+    # dirs added to the registry) stops inflating the rate after window_days
+    cutoff = datetime.now() - timedelta(days=window_days)
+    recent: list[HealthReport] = []
+    for r in usable:
+        try:
+            ts = datetime.fromisoformat(r.timestamp)
+        except ValueError:
+            continue
+        if ts >= cutoff:
+            recent.append(r)
+    if len(recent) < 2:
         return None
-    days = _window_days(usable[0], usable[-1])
+    days = _window_days(recent[0], recent[-1])
     if not days:
         return None
-    delta = usable[-1].statedirs.total_bytes - usable[0].statedirs.total_bytes
+    delta = recent[-1].statedirs.total_bytes - recent[0].statedirs.total_bytes
     return delta / 1e9 / days

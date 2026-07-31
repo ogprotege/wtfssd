@@ -35,6 +35,7 @@ def is_ide_process(comm: str) -> bool:
 
 def parse_ps(text: str, ghost_seconds: int) -> ProcessReport:
     ghosts: list[GhostProcess] = []
+    ide_procs: list[GhostProcess] = []
     total = 0
     for line in text.splitlines():
         parts = line.split(None, 4)
@@ -44,14 +45,17 @@ def parse_ps(text: str, ghost_seconds: int) -> ProcessReport:
         if not is_ide_process(comm):
             continue
         total += 1
-        age = etime_to_seconds(etime)
-        if age >= ghost_seconds:
-            ghosts.append(GhostProcess(
-                pid=int(pid), ppid=int(ppid), name=comm.strip(),
-                age_seconds=age, rss_mb=int(rss_kb) / 1024,
-            ))
+        proc = GhostProcess(
+            pid=int(pid), ppid=int(ppid), name=comm.strip(),
+            age_seconds=etime_to_seconds(etime), rss_mb=int(rss_kb) / 1024,
+        )
+        ide_procs.append(proc)
+        if proc.age_seconds >= ghost_seconds:
+            ghosts.append(proc)
     ghosts.sort(key=lambda g: g.age_seconds, reverse=True)
-    return ProcessReport(ghosts=ghosts, total_ide_processes=total)
+    ide_procs.sort(key=lambda g: g.rss_mb, reverse=True)
+    return ProcessReport(ghosts=ghosts, total_ide_processes=total,
+                         ide_procs=ide_procs)
 
 
 def collect_processes(ghost_days: float = 3.0,

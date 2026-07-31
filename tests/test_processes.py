@@ -71,6 +71,17 @@ class TestParsePs(unittest.TestCase):
         self.assertEqual(rep.total_ide_processes, 0)
         self.assertIsNotNone(rep.note)
 
+    def test_ide_procs_all_ages_sorted_by_rss(self):
+        text = (Path(__file__).parent / "fixtures" / "ps.txt").read_text()
+        rep = processes.parse_ps(text, ghost_seconds=3 * 86400)
+        self.assertGreaterEqual(len(rep.ide_procs), len(rep.ghosts))
+        self.assertEqual(rep.total_ide_processes, len(rep.ide_procs))
+        rss = [p.rss_mb for p in rep.ide_procs]
+        self.assertEqual(rss, sorted(rss, reverse=True))
+        # ghosts are a subset of ide_procs by pid
+        self.assertTrue({g.pid for g in rep.ghosts} <=
+                        {p.pid for p in rep.ide_procs})
+
 
 if __name__ == "__main__":
     unittest.main()

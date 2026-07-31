@@ -5,7 +5,13 @@ monitors SSD wear, swap pressure, storage headroom, ghost IDE processes, and
 agentic-IDE state growth — then alerts you, cleans safely, and fixes the churn
 at its source. It also watches memory pressure, uptime, thermal throttle and
 battery state, APFS local snapshots, Time Machine backup readiness, IDE crash
-frequency, live write rate, and external drives.
+frequency, live write rate, and external drives — plus per-process RSS leak
+slopes, open-file-descriptor counts, the MCP server fleet, indexer snapshot
+churn, retention-config posture, launchd persistence changes, Spotlight
+indexer load, log growth, and uncommitted/unpushed work across your git
+repos. An opt-in secrets scanner (off by default) flags API keys and tokens
+left lying in agent state — it reports file, line, and rule name only, never
+the secret itself.
 
 It exists because of the vibe-coding SSD panic: after months of heavy agentic
 coding (dozens of parallel agents, IDEs scaffolding apps autonomously), developers
@@ -50,7 +56,8 @@ ssdwtf scan              # full health report: SMART, storage, swap, ghost
                          # processes, agentic-state sizes, findings, health score
 ssdwtf scan --json       # same, machine-readable
 ssdwtf scan --fast       # fast tier only (skips state-dir sizing, APFS
-                         # snapshots, backup, crashes); watch --fast likewise
+                         # snapshots, backup, crashes, churn, fds, secrets,
+                         # logs, gitwatch); watch --fast likewise
 ssdwtf clean             # dry-run: lists what *would* be cleaned, deletes nothing
 ssdwtf clean cursor-caches --apply   # actually clean (moves to Trash)
 ssdwtf optimize ignore ~/my-project  # write/merge .cursorignore churn rules
@@ -79,8 +86,11 @@ unknown target.
 - **Denylist.** Paths outside your home directory, your home directory itself,
   and `Documents`/`Desktop`/`Movies`/`Music`/`Pictures` are never touched.
 - **Read-only monitoring.** `scan`, `watch`, `history`, and `config` only read
-  the system; the only writes are scan history and alert state under
-  `~/.local/share/ssdwtf`.
+  the system; the only writes are scan history, the metrics baseline, alert
+  state, and churn/launchd baselines under `~/.local/share/ssdwtf`.
+- **Opt-in secrets scanning.** The secrets scanner does nothing unless you
+  set `secrets.enabled: true`. It reports only the file path, line number,
+  and which rule matched — the matched value is never displayed or stored.
 
 ## Configuration
 
@@ -97,6 +107,7 @@ Example — alert on swap earlier than the 8 GB default:
 ```
 
 Other useful keys: `disk.warn_free_pct`, `procs.ghost_days`,
+`procs.leak_warn_mb_h` / `procs.leak_window_h` (RSS leak-slope alert),
 `state.vscdb_warn_gb`, `smart.device`, `smart.external_devices` (extra drives
 to probe, e.g. `["/dev/disk2"]`), `alerts.cooldown_hours`,
 `watch.interval_minutes`, `projects` (directories scanned for stale
@@ -105,25 +116,40 @@ and skips), `backup.enabled` / `backup.warn_hours` / `backup.crit_hours`
 (Time Machine freshness), `apfs.snapshot_warn_days`,
 `pressure.sustained_min`, `crashes.warn_weekly` / `crashes.apps`,
 `thermal.warn_below`, `uptime.warn_days`, `writerate.warn_mb_s`,
-`battery.capacity_info_pct`. Run `ssdwtf config --show` for the full merged
-picture.
+`battery.capacity_info_pct`, `churn.warn_turnover` / `churn.warn_gb`
+(snapshot churn), `fds.warn_count`, `mcp.config_path`,
+`secrets.enabled` (**opt-in — defaults to `false`**; the scanner reports
+paths, line numbers, and rule names only, never the matched values),
+`spotlight.warn_cpu_pct`, `logs.warn_gb_day` / `logs.extra_dirs`,
+`git.repos` (repositories watched for uncommitted/unpushed work) /
+`git.warn_changes` / `git.warn_unpushed`. Run `ssdwtf config --show` for the
+full merged picture.
 
 ## How it works
 
 - `ssdwtf/collectors/` — read-only probes: SMART (`smartctl`, including the
   NVMe critical-warning flag and the device-reported spare threshold), swap
   (`sysctl`), disk (`df -k`, 1K-blocks converted to decimal GB), processes
-  (`ps`), agentic state dirs (`du`-style sizing), memory pressure
+  (`ps`, including the per-IDE RSS feed behind leak-slope detection), agentic
+  state dirs (`du`-style sizing of an 18-entry categorized registry with a
+  double-count guard for nested paths), memory pressure
   (`sysctl` / `memory_pressure`), uptime / thermal throttle / battery
   (`sysctl` / `pmset` / `ioreg`), APFS local snapshots (`tmutil`), Time
   Machine readiness (`tmutil destinationinfo`), crash frequency
-  (`~/Library/Logs/DiagnosticReports`), write rate (`iostat`), and SMART for
-  external drives.
+  (`~/Library/Logs/DiagnosticReports`), write rate (`iostat`), SMART for
+  external drives, snapshot churn (`.pack` create/destroy turnover vs a
+  stored baseline), open-fd counts (`lsof`), the MCP server fleet
+  (`claude_desktop_config.json` cross-checked with `pgrep`), retention-config
+  posture (e.g. `cleanupPeriodDays`), launchd persistence (LaunchAgent/Daemon
+  diff vs a stored baseline), Spotlight indexer load (`ps` / `mdutil`), log
+  growth (`~/Library/Logs` sizing), uncommitted/unpushed work (read-only
+  `git status` over configured repos), and the opt-in secrets scanner.
 - `ssdwtf/analyze.py` — turns a report + history into severity-ranked
-  findings, plus a status for each of the eight domains shown above the
+  findings, plus a status for each of the ten domains shown above the
   findings: drive, backup, headroom, memory, processes, state, stability,
-  telemetry (`ok` / `warn` / `critical`, or `unknown` when a domain's
-  collectors returned no data — absence of data is never reported as `ok`).
+  telemetry, privacy, work (`ok` / `warn` / `critical`, or `unknown` when a
+  domain's collectors returned no data — absence of data is never reported
+  as `ok`).
 - `ssdwtf/history.py` — JSONL scan history for trend and growth-rate analysis.
 - `ssdwtf/metrics.py` — sqlite baseline store
   (`~/.local/share/ssdwtf/metrics.db`); every scan/watch pass records its
