@@ -1,5 +1,6 @@
-// PopoverView.swift — the dropdown UI. Modeled on modern monitor widgets:
-// dark card, hero metric, small-caps sections, right-aligned values.
+// PopoverView.swift — the main card: hero, vitals with meter bars,
+// clickable domain rows, footer. Detail and settings views live in
+// DetailViews.swift.
 
 import SwiftUI
 
@@ -28,8 +29,43 @@ enum Theme {
 }
 
 final class MonitorModel: ObservableObject {
-    @Published var payload: Payload?
+    @Published var payload: Payload?        // fast tier (title/hero/vitals)
+    @Published var fullPayload: Payload?    // full tier (detail views)
     @Published var lastError = false
+    @Published var selectedDomain: String?
+    @Published var showSettings = false
+    @Published var refreshInterval: Double {
+        didSet { UserDefaults.standard.set(refreshInterval, forKey: "refreshInterval") }
+    }
+
+    init() {
+        let saved = UserDefaults.standard.double(forKey: "refreshInterval")
+        refreshInterval = saved > 0 ? saved : 60
+    }
+
+    /// Best available payload for detail rendering (full preferred).
+    var detailPayload: Payload? { fullPayload ?? payload }
+
+    func findings(for domain: String) -> [Finding] {
+        let prefixes: [String]
+        switch domain {
+        case "drive": prefixes = ["smart."]
+        case "backup": prefixes = ["backup."]
+        case "headroom": prefixes = ["disk.", "apfs."]
+        case "memory": prefixes = ["swap.", "pressure.", "memory."]
+        case "processes": prefixes = ["procs.", "mcp."]
+        case "state": prefixes = ["state.", "logs."]
+        case "stability": prefixes = ["crashes.", "thermal.", "uptime.",
+                                     "launchd.", "spotlight."]
+        case "telemetry": prefixes = ["writerate.", "battery."]
+        case "privacy": prefixes = ["secrets.", "retention."]
+        case "work": prefixes = ["work."]
+        default: prefixes = []
+        }
+        return (detailPayload?.findings ?? []).filter { f in
+            prefixes.contains(where: { f.code.hasPrefix($0) })
+        }
+    }
 }
 
 struct PopoverView: View {
@@ -39,6 +75,23 @@ struct PopoverView: View {
     var onQuit: () -> Void
 
     var body: some View {
+        Group {
+            if model.showSettings {
+                SettingsView(model: model, onAction: onAction)
+            } else if let domain = model.selectedDomain {
+                DomainDetailView(domain: domain, model: model)
+            } else {
+                mainCard
+            }
+        }
+        .padding(14)
+        .frame(width: 300)
+        .background(.ultraThinMaterial)
+    }
+
+    // MARK: main card
+
+    private var mainCard: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
             if let payload = model.payload {
@@ -46,15 +99,23 @@ struct PopoverView: View {
                 vitals(payload)
                 section("DOMAINS")
                 ForEach(Array(payload.domains.enumerated()), id: \.offset) { _, d in
-                    HStack {
-                        Circle().fill(Theme.statusColor(d.status))
-                            .frame(width: 7, height: 7)
-                        Text(d.name).font(.system(size: 12))
-                        Spacer()
-                        Text(d.status).font(Theme.valueFont)
-                            .foregroundStyle(Theme.statusColor(d.status))
+                    Button { model.selectedDomain = d.name } label: {
+                        HStack {
+                            Circle().fill(Theme.statusColor(d.status))
+                                .frame(width: 7, height: 7)
+                            Text(d.name).font(.system(size: 12))
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Text(d.status).font(Theme.valueFont)
+                                .foregroundStyle(Theme.statusColor(d.status))
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(.vertical, 2.5)
+                        .contentShape(Rectangle())
                     }
-                    .padding(.vertical, 2.5)
+                    .buttonStyle(.plain)
                 }
                 let top = topFindings(payload)
                 if !top.isEmpty {
@@ -84,9 +145,6 @@ struct PopoverView: View {
             }
             footer
         }
-        .padding(14)
-        .frame(width: 292)
-        .background(.ultraThinMaterial)
     }
 
     private var header: some View {
@@ -94,12 +152,16 @@ struct PopoverView: View {
             Text("SSDWTF MONITOR").font(Theme.sectionFont)
                 .foregroundStyle(.secondary)
             Spacer()
+            Button { model.showSettings = true } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .buttonStyle(.plain).foregroundStyle(.secondary)
             Button(action: onRefresh) {
                 Image(systemName: "arrow.clockwise")
                     .font(.system(size: 11, weight: .semibold))
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
+            .buttonStyle(.plain).foregroundStyle(.secondary)
         }
         .padding(.bottom, 10)
     }
@@ -121,32 +183,52 @@ struct PopoverView: View {
                 .font(.system(size: 9))
                 .foregroundStyle(.secondary)
         }
-        .padding(.bottom, 8)
+        .padding(.bottom, 4)
     }
+
+    // MARK: vitals with meter bars (value + reference point)
 
     private func vitals(_ payload: Payload) -> some View {
-        VStack(alignment: .leading, spacing: 2.5) {
+        VStack(alignment: .leading, spacing: 5) {
             section("VITALS")
-            vitalRow("swap", value: payload.vitals.swapGB.map { String(format: "%.1f GB", $0) },
-                     bad: (payload.vitals.swapGB ?? 0) >= 8)
-            vitalRow("disk free", value: payload.vitals.diskFreePct.map { String(format: "%.0f%%", $0) },
-                     bad: (payload.vitals.diskFreePct ?? 100) < 15)
-            vitalRow("write rate", value: payload.vitals.writeMBs.map { String(format: "%.1f MB/s", $0) },
-                     bad: (payload.vitals.writeMBs ?? 0) >= 200)
-            vitalRow("mem pressure", value: payload.vitals.pressureLevel.map { "level \($0)" },
-                     bad: (payload.vitals.pressureLevel ?? 1) >= 2)
+            if let pct = payload.vitals.smartPercentUsed {
+                MeterRow(name: "SSD wear",
+                         value: "\(pct)%", reference: "of rated life",
+                         fraction: Double(pct) / 100, marker: nil,
+                         tint: pct >= 90 ? .red : (pct >= 50 ? .orange : .green))
+            }
+            MeterRow(name: "swap",
+                     value: fmt(payload.vitals.swapGB, "%.1f GB"),
+                     reference: "crit \(Int(16)) GB",
+                     fraction: (payload.vitals.swapGB ?? 0) / 16,
+                     marker: 8.0 / 16.0,
+                     tint: (payload.vitals.swapGB ?? 0) >= 16 ? .red
+                           : ((payload.vitals.swapGB ?? 0) >= 8 ? .orange : .green))
+            MeterRow(name: "disk free",
+                     value: fmt(payload.vitals.diskFreePct, "%.0f%%"),
+                     reference: "of \(fmt(payload.vitals.diskSizeGB, "%.0f GB"))",
+                     fraction: (payload.vitals.diskFreePct ?? 100) / 100,
+                     marker: 0.15,
+                     tint: (payload.vitals.diskFreePct ?? 100) < 10 ? .red
+                           : ((payload.vitals.diskFreePct ?? 100) < 15 ? .orange : .green))
+            MeterRow(name: "write rate",
+                     value: fmt(payload.vitals.writeMBs, "%.1f MB/s"),
+                     reference: "warn 200",
+                     fraction: (payload.vitals.writeMBs ?? 0) / 400,
+                     marker: 0.5,
+                     tint: (payload.vitals.writeMBs ?? 0) >= 200 ? .orange : .green)
+            MeterRow(name: "mem pressure",
+                     value: payload.vitals.pressureLevel.map { "level \($0)" } ?? "—",
+                     reference: "of 4",
+                     fraction: Double(payload.vitals.pressureLevel ?? 1) / 4,
+                     marker: 0.5,
+                     tint: (payload.vitals.pressureLevel ?? 1) >= 4 ? .red
+                           : ((payload.vitals.pressureLevel ?? 1) >= 2 ? .orange : .green))
         }
-        .padding(.bottom, 2)
     }
 
-    private func vitalRow(_ name: String, value: String?, bad: Bool) -> some View {
-        HStack {
-            Text(name).font(.system(size: 12))
-            Spacer()
-            Text(value ?? "—").font(Theme.valueFont)
-                .foregroundStyle(value == nil ? Color.gray
-                                : (bad ? Color.orange : Color.primary))
-        }
+    private func fmt(_ v: Double?, _ format: String) -> String {
+        v.map { String(format: format, $0) } ?? "—"
     }
 
     private func section(_ title: String) -> some View {
@@ -181,5 +263,41 @@ struct PopoverView: View {
             Theme.severityRank[$0.severity, default: 0]
                 > Theme.severityRank[$1.severity, default: 0]
         }.prefix(4))
+    }
+}
+
+/// A labeled meter: name, thin bar with optional threshold marker, and a
+/// value + reference so the number always has context.
+struct MeterRow: View {
+    let name: String
+    let value: String
+    let reference: String
+    let fraction: Double
+    let marker: Double?
+    let tint: Color
+
+    var body: some View {
+        VStack(spacing: 2) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(name).font(.system(size: 12))
+                Spacer()
+                Text(value).font(Theme.valueFont).foregroundStyle(tint)
+                Text(reference).font(.system(size: 9))
+                    .foregroundStyle(.secondary)
+            }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.primary.opacity(0.10))
+                    Capsule().fill(tint.opacity(0.85))
+                        .frame(width: max(2, geo.size.width * min(1, max(0, fraction))))
+                    if let marker {
+                        Rectangle().fill(Color.primary.opacity(0.45))
+                            .frame(width: 1.5)
+                            .offset(x: geo.size.width * min(1, max(0, marker)) - 0.75)
+                    }
+                }
+            }
+            .frame(height: 4)
+        }
     }
 }

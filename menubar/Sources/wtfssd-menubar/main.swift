@@ -5,6 +5,7 @@
 // payload summary as text and exits.
 
 import AppKit
+import Combine
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -13,7 +14,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let model = MonitorModel()
     private let scanner = Scanner()
     private var timer: Timer?
-    private let refreshInterval: TimeInterval = 60
+    private var fullTimer: Timer?
+    private var intervalObserver: Any?
+    private let fullRefreshInterval: TimeInterval = 900  // 15 min
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if CommandLine.arguments.contains("--dump-menu") {
@@ -34,17 +37,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             rootView: PopoverView(
                 model: model,
                 onRefresh: { [weak self] in self?.refresh() },
-                onAction: { [weak self] cmd in self?.openInTerminal(cmd) },
+                onAction: { [weak self] cmd in self?.handleAction(cmd) },
                 onQuit: { NSApplication.shared.terminate(nil) }))
         renderTitle()
         refresh()
+        refreshFull()
+        startFastTimer()
+        fullTimer = Timer.scheduledTimer(
+            withTimeInterval: fullRefreshInterval, repeats: true) { [weak self] _ in
+            self?.refreshFull()
+        }
+        intervalObserver = model.$refreshInterval.sink { [weak self] _ in
+            self?.startFastTimer()
+        }
         if CommandLine.arguments.contains("--open") {
             // verification hook: open the popover shortly after launch
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
                 self.togglePopover()
             }
         }
-        timer = Timer.scheduledTimer(withTimeInterval: refreshInterval,
+    }
+
+    private func startFastTimer() {
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: model.refreshInterval,
                                      repeats: true) { [weak self] _ in
             self?.refresh()
         }
@@ -76,7 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
             do {
-                let payload = try self.scanner.scan()
+                let payload = try self.scanner.scan(fast: true)
                 DispatchQueue.main.async {
                     self.model.payload = payload
                     self.model.lastError = false
@@ -89,6 +105,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self.renderTitle()
                 }
             }
+        }
+    }
+
+    /// Full scan (slow collectors included) — feeds the detail views.
+    private func refreshFull() {
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let self,
+                  let payload = try? self.scanner.scan(fast: false) else { return }
+            DispatchQueue.main.async {
+                self.model.fullPayload = payload
+            }
+        }
+    }
+
+    private func handleAction(_ cmd: String) {
+        switch cmd {
+        case "config-open":
+            NSWorkspace.shared.open(URL(fileURLWithPath:
+                "\(NSHomeDirectory())/.config/ssdwtf/config.json"))
+        case "data-open":
+            NSWorkspace.shared.open(URL(fileURLWithPath:
+                "\(NSHomeDirectory())/.local/share/ssdwtf"))
+        default:
+            openInTerminal(cmd)
         }
     }
 
@@ -135,7 +175,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func dumpMenu() {
-        if let payload = try? scanner.scan() {
+        if let payload = try? scanner.scan(fast: true) {
             var lines = ["Health \(payload.score)/100 (\(payload.grade))"]
             for d in payload.domains {
                 lines.append("● \(d.name) — \(d.status)")
@@ -156,8 +196,19 @@ if let idx = CommandLine.arguments.firstIndex(of: "--snapshot"),
    idx + 1 < CommandLine.arguments.count {
     let path = CommandLine.arguments[idx + 1]
     let model = MonitorModel()
-    model.payload = try? Scanner().scan()
+    let scanner = Scanner()
+    model.payload = try? scanner.scan(fast: true)
+    model.fullPayload = try? scanner.scan(fast: false)
     model.lastError = model.payload == nil
+    // optional 3rd arg: a domain name to render its detail view, or "settings"
+    if idx + 2 < CommandLine.arguments.count {
+        let what = CommandLine.arguments[idx + 2]
+        if what == "settings" {
+            model.showSettings = true
+        } else {
+            model.selectedDomain = what
+        }
+    }
     let view = PopoverView(model: model, onRefresh: {},
                            onAction: { _ in }, onQuit: {})
     let host = NSHostingView(rootView: view)
