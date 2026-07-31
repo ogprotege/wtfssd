@@ -17,7 +17,7 @@ DEFAULTS: dict[str, Any] = {
               "external_devices": []},
     "alerts": {"enabled": True, "cooldown_hours": 24.0,
                "cooldown_critical_hours": 4.0},
-    "watch": {"interval_minutes": 60},
+    "watch": {"interval_minutes": 60, "fast_interval_minutes": 5},
     "clean": {"node_stale_days": 30, "caches_top_n": 10, "caches_min_mb": 500},
     "projects": [],
     "tiers": {"fast": ["smart", "swap", "disk", "processes", "pressure",

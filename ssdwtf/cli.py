@@ -235,10 +235,18 @@ def cmd_optimize(args: argparse.Namespace) -> int:
         print(f"wrote {path}")
         print("loaded with launchctl" if loaded else
               f"not loaded — run: launchctl bootstrap gui/$(id -u) {path}")
+        config, _ = load_config()
+        interval = int(config.get("watch", {}).get("fast_interval_minutes", 5)) * 60
+        fpath, floaded = optimize.install_fast_agent(interval_seconds=interval)
+        print(f"wrote {fpath} (fast tier, every {interval // 60} min)")
+        print("loaded with launchctl" if floaded else
+              f"not loaded — run: launchctl bootstrap gui/$(id -u) {fpath}")
         return 0
     if args.opt_command == "uninstall-agent":
         removed = optimize.uninstall_agent()
-        print("agent removed" if removed else "no agent installed")
+        fast_removed = optimize.uninstall_agent(label="com.ssdwtf.watch.fast")
+        n = int(removed) + int(fast_removed)
+        print(f"{n} agent(s) removed" if n else "no agent installed")
         return 0
     return 3
 

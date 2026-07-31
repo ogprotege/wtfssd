@@ -55,6 +55,24 @@ class TestAgent(unittest.TestCase):
             self.assertFalse(path.exists())
             self.assertFalse(optimize.uninstall_agent(launch_agents_dir=la))
 
+    def test_install_fast_agent_writes_plist(self):
+        with tempfile.TemporaryDirectory() as td:
+            path, loaded = optimize.install_fast_agent(
+                launch_agents_dir=Path(td))
+            self.assertFalse(loaded)  # tempdir: launchctl untouched
+            text = path.read_text()
+            self.assertIn("com.ssdwtf.watch.fast", text)
+            self.assertIn("--fast", text)
+            self.assertIn("<integer>300</integer>", text)
+
+    def test_uninstall_removes_fast_label_too(self):
+        with tempfile.TemporaryDirectory() as td:
+            optimize.install_agent(launch_agents_dir=Path(td))
+            optimize.install_fast_agent(launch_agents_dir=Path(td))
+            self.assertTrue(optimize.uninstall_agent(launch_agents_dir=Path(td)))
+            self.assertTrue(optimize.uninstall_agent(
+                label="com.ssdwtf.watch.fast", launch_agents_dir=Path(td)))
+
 
 if __name__ == "__main__":
     unittest.main()
