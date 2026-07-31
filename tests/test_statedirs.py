@@ -39,7 +39,14 @@ class TestCollect(unittest.TestCase):
         self.assertEqual(by_key["cursor-vscdb-backups"].size_bytes, 4000)
         self.assertEqual(by_key["claude-home"].size_bytes, 100)
         self.assertFalse(by_key["windsurf-app-support"].exists)
-        self.assertEqual(rep.total_bytes, sum(d.size_bytes for d in rep.dirs))
+        # Double-count guard: entries nested inside another tracked entry
+        # (cursor-vscdb, cursor-vscdb-backups live inside cursor-app-support)
+        # are reported individually but excluded from total_bytes.
+        non_nested = [d for d in rep.dirs
+                      if d.exists and not any(
+                          o is not d and d.path.startswith(o.path + "/")
+                          for o in rep.dirs)]
+        self.assertEqual(rep.total_bytes, sum(d.size_bytes for d in non_nested))
         self.assertEqual(statedirs.vscdb_size_bytes(rep), 5000)
 
     def test_empty_home(self):
@@ -47,6 +54,23 @@ class TestCollect(unittest.TestCase):
             rep = statedirs.collect_statedirs(home=Path(td))
         self.assertEqual(rep.total_bytes, 0)
         self.assertTrue(all(not d.exists for d in rep.dirs))
+
+    def test_categories_and_double_count_guard(self):
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td)
+            app = home / "Library/Application Support/Cursor"
+            (app / "User/globalStorage").mkdir(parents=True)
+            (app / "blob.bin").write_bytes(b"x" * 1000)
+            (app / "User/globalStorage/state.vscdb").write_bytes(b"y" * 500)
+            rep = statedirs.collect_statedirs(home=home)
+            by_key = {d.key: d for d in rep.dirs}
+            self.assertEqual(by_key["cursor-app-support"].category, "ai-state")
+            # total counts cursor-app-support (1500) but NOT cursor-vscdb
+            # (nested) — no double count
+            self.assertEqual(rep.total_bytes, 1500)
+            self.assertEqual(rep.category_totals.get("ai-state"), 1500)
+            # vscdb is still reported individually
+            self.assertEqual(by_key["cursor-vscdb"].size_bytes, 500)
 
 
 if __name__ == "__main__":
