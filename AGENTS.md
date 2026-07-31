@@ -195,8 +195,8 @@ These are contractual, from the implementation plan's global constraints:
   `alerts.cooldown_critical_hours`, `watch.interval_minutes`,
   `watch.fast_interval_minutes`, `projects` (dirs scanned for stale
   `node_modules`), `tiers.fast`/`tiers.slow` (collector split behind
-  `scan --fast`; fast adds `retention`/`launchd`/`spotlight`/`mcp`, slow
-  carries `statedirs`/`apfs`/`backup`/`crashes`/`churn`/`fds`/`secrets`/
+  `scan --fast`; fast adds `backup`/`retention`/`launchd`/`spotlight`/`mcp`,
+  slow carries `statedirs`/`apfs`/`crashes`/`churn`/`fds`/`secrets`/
   `logs`/`gitwatch`), `backup.enabled`/`backup.warn_hours`/`backup.crit_hours`,
   `apfs.snapshot_warn_days`, `pressure.sustained_min`,
   `crashes.warn_weekly`/`crashes.apps`, `thermal.warn_below`,

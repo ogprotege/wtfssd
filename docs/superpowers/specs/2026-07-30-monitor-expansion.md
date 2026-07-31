@@ -48,8 +48,8 @@ list, with defaults below). `scan` runs both tiers (back-compatible);
 30–60 s from a menu-bar poller or `watch --fast`.
 
 - **fast** (cheap counters, no directory walks): smart, swap, disk,
-  processes, pressure, system (uptime/throttle/battery), writerate
-- **slow** (walks or multi-second commands): statedirs, apfs, backup,
+  processes, pressure, system (uptime/throttle/battery), writerate, backup
+- **slow** (walks or multi-second commands): statedirs, apfs,
   crashes, plus Phase 2 (churn, fds, mcp, secrets, logs, spotlight,
   retention, launchd audit)
 
@@ -162,8 +162,8 @@ Warning`, `Available Spare Threshold`, `Unsafe Shutdowns`, and composite
 ## 5. Config additions (merged over DEFAULTS, back-compatible)
 
 ```json
-"tiers":   {"fast": ["smart","swap","disk","processes","pressure","system","writerate"],
-            "slow": ["statedirs","apfs","backup","crashes"]},
+"tiers":   {"fast": ["smart","swap","disk","processes","pressure","system","writerate","backup"],
+            "slow": ["statedirs","apfs","crashes"]},
 "pressure": {"sustained_min": 10},
 "apfs":     {"snapshot_warn_days": 7},
 "backup":   {"enabled": true, "warn_hours": 48, "crit_hours": 168},
