@@ -8,12 +8,14 @@ from ssdwtf import models
 from ssdwtf import history
 
 
-def make_report(ts: str, units: int | None, state_bytes: int) -> models.HealthReport:
+def make_report(ts: str, units: int | None, state_bytes: int,
+                note: str | None = None) -> models.HealthReport:
     rep = models.make_empty_report(ts, 64.0)
     rep.smart = models.SmartReport(available=units is not None,
                                    data_units_written=units,
                                    tb_written=(units or 0) * 512_000 / 1e12)
-    rep.statedirs = models.StateDirReport(dirs=[], total_bytes=state_bytes)
+    rep.statedirs = models.StateDirReport(dirs=[], total_bytes=state_bytes,
+                                          note=note)
     return rep
 
 
@@ -66,6 +68,19 @@ class TestHistory(unittest.TestCase):
         h = [make_report("2026-07-29T10:00:00", None, 1_000_000_000),
              make_report("2026-07-30T10:00:00", None, 3_000_000_000)]
         self.assertAlmostEqual(history.state_growth_gb_per_day(h), 2.0)
+
+    def test_state_growth_ignores_uncollected_fast_rows(self):
+        fast = "not collected (--fast)"
+        # fast row in the middle: growth reflects 10 → 11 GB only
+        h = [make_report("2026-07-29T10:00:00", None, 10_000_000_000),
+             make_report("2026-07-29T22:00:00", None, 0, note=fast),
+             make_report("2026-07-30T10:00:00", None, 11_000_000_000)]
+        self.assertAlmostEqual(history.state_growth_gb_per_day(h), 1.0)
+        # fast row at the window start must not inflate the delta
+        h = [make_report("2026-07-28T10:00:00", None, 0, note=fast),
+             make_report("2026-07-29T10:00:00", None, 10_000_000_000),
+             make_report("2026-07-30T10:00:00", None, 11_000_000_000)]
+        self.assertAlmostEqual(history.state_growth_gb_per_day(h), 1.0)
 
 
 if __name__ == "__main__":

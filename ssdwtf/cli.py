@@ -59,7 +59,10 @@ def build_report(config: dict, fast: bool = False) -> HealthReport:
               else ApfsReport(available=False, error="not collected (--fast)")),
         backup=(backup_col.collect_backup()
                 if want("backup") and config.get("backup", {}).get("enabled", True)
-                else BackupReport(available=False, error="not collected (--fast)")),
+                else BackupReport(
+                    available=False,
+                    error=("not collected (--fast)" if not want("backup")
+                           else "not collected (backup.enabled=false)"))),
         crashes=(crashes_col.collect_crashes(crashes_cfg.get("apps", []))
                  if want("crashes")
                  else CrashReport(available=False, error="not collected (--fast)")),

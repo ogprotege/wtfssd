@@ -64,10 +64,13 @@ def gb_written_per_day(history: list[HealthReport]) -> float | None:
 
 
 def state_growth_gb_per_day(history: list[HealthReport]) -> float | None:
-    if len(history) < 2:
+    # skip rows where statedirs was not collected (e.g. scan --fast placeholders
+    # with total_bytes=0) — a 0 at the window start would inflate the delta
+    usable = [r for r in history if not r.statedirs.note]
+    if len(usable) < 2:
         return None
-    days = _window_days(history[0], history[-1])
+    days = _window_days(usable[0], usable[-1])
     if not days:
         return None
-    delta = history[-1].statedirs.total_bytes - history[0].statedirs.total_bytes
+    delta = usable[-1].statedirs.total_bytes - usable[0].statedirs.total_bytes
     return delta / 1e9 / days

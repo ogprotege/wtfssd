@@ -129,7 +129,8 @@ tests/
 Data flow: collectors → `models.HealthReport` → `analyze` → `[Finding]` +
 score → `report` (text | json); `history.append`, `metrics.record`, and
 `alerts.notify` branch off the same findings — every scan/watch pass appends
-JSONL history AND records metrics to `~/.local/share/ssdwtf/metrics.db`.
+JSONL history AND records metrics to `~/.local/share/ssdwtf/metrics.db`
+(`scan --no-history` does neither).
 `cleaners` sizes targets from collectors then dry-runs
 or Trashes; `optimize` writes ignore files / LaunchAgent plists.
 

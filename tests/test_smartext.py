@@ -12,11 +12,11 @@ class TestSmartExtension(unittest.TestCase):
     def test_internal_fixture_new_fields(self):
         text = (FIX / "smartctl.txt").read_text()
         rep = smart.parse_smartctl(text)
-        # real Apple-drive fixture: verify against actual fixture values;
-        # all four must parse without raising
-        for v in (rep.critical_warning, rep.spare_threshold,
-                  rep.unsafe_shutdowns, rep.temperature_c):
-            self.assertTrue(v is None or isinstance(v, int))
+        # real Apple-drive fixture: exact values live-verified against the capture
+        self.assertEqual(rep.critical_warning, 0)
+        self.assertEqual(rep.spare_threshold, 99)
+        self.assertEqual(rep.unsafe_shutdowns, 9)
+        self.assertEqual(rep.temperature_c, 29)
 
     def test_nvme_fields_parse(self):
         text = (

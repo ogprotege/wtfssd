@@ -108,7 +108,7 @@ Maps 1:1 to the article's symptom map:
 
 | Article mechanism | Collector | Default threshold (config key) |
 |---|---|---|
-| SSD wear | `smartctl` Percentage Used, Available Spare, Media/Data errors, Power-On Hours, Data Units Written → TB | warn if media_errors > 0; critical if NVMe Critical Warning ≠ 0, or available_spare below the device-reported threshold (see the monitor-expansion spec) or health != PASSED (`smart.*`) |
+| SSD wear | `smartctl` Percentage Used, Available Spare, Media/Data errors, Power-On Hours, Data Units Written → TB | critical if media_errors > 0; critical if NVMe Critical Warning ≠ 0, or available_spare below the device-reported threshold (see the monitor-expansion spec) or health != PASSED (`smart.*`) |
 | Swap pressure | `sysctl vm.swapusage` | warn ≥ 8 GB used, critical ≥ 16 GB (`swap.warn_gb`, `swap.crit_gb`) |
 | Headroom | `df` on data volume | warn < 15% free, critical < 10% (`disk.warn_free_pct`, `disk.crit_free_pct`) |
 | Ghost processes | `ps` — processes whose name matches IDE patterns (Cursor, Code, Claude, Windsurf, Zed, Electron helpers) with age > `procs.ghost_days` (3 d) or total count > `procs.warn_count` (20) | warn |
