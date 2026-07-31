@@ -8,7 +8,7 @@ from contextlib import ExitStack, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
-from ssdwtf import cli, models
+from wtfssd import cli, models
 
 
 def fake_report() -> models.HealthReport:
@@ -20,11 +20,11 @@ class TestCli(unittest.TestCase):
         buf = io.StringIO()
         with tempfile.TemporaryDirectory() as td, \
              mock.patch.object(cli, "build_report", return_value=report), \
-             mock.patch("ssdwtf.analyze.analyze", return_value=findings), \
-             mock.patch("ssdwtf.history.append_history"), \
-             mock.patch("ssdwtf.history.load_history", return_value=[]), \
-             mock.patch("ssdwtf.metrics.record"), \
-             mock.patch("ssdwtf.config.data_dir", return_value=Path(td)), \
+             mock.patch("wtfssd.analyze.analyze", return_value=findings), \
+             mock.patch("wtfssd.history.append_history"), \
+             mock.patch("wtfssd.history.load_history", return_value=[]), \
+             mock.patch("wtfssd.metrics.record"), \
+             mock.patch("wtfssd.config.data_dir", return_value=Path(td)), \
              redirect_stdout(buf):
             code = cli.main(argv)
         return code, buf.getvalue()
@@ -97,9 +97,9 @@ class TestCli(unittest.TestCase):
 
     def test_clean_dry_run_lists_targets(self):
         with tempfile.TemporaryDirectory() as td, \
-             mock.patch("ssdwtf.cleaners.clean_target") as ct, \
+             mock.patch("wtfssd.cleaners.clean_target") as ct, \
              redirect_stdout(io.StringIO()) as buf:
-            from ssdwtf.cleaners import CleanResult, CleanAction
+            from wtfssd.cleaners import CleanResult, CleanAction
             ct.return_value = CleanResult("cursor-caches", False, actions=[
                 CleanAction("/x/Cache", 500, "would-trash")])
             code = cli.main(["clean", "cursor-caches"])

@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssdwtf.collectors import retention
+from wtfssd.collectors import retention
 
 
 class TestRetention(unittest.TestCase):

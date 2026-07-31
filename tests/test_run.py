@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from ssdwtf.collectors._run import run_cmd
+from wtfssd.collectors._run import run_cmd
 
 
 class TestRunCmd(unittest.TestCase):

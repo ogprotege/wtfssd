@@ -1,4 +1,4 @@
-# ssdwtf
+# wtfssd
 
 Why is my Mac's SSD busy / full / "dying"? A zero-dependency Python 3 CLI that
 monitors SSD wear, swap pressure, storage headroom, ghost IDE processes, and
@@ -22,7 +22,7 @@ drowns: 25 GB of swap on a 16 GB machine, Cursor helper processes alive for 27
 days, a `state.vscdb` chat database growing ~1 GB/day with no retention policy,
 and indexer snapshot churn that regenerates the moment you delete it. The SSD
 was never dying; it was trapped inside an unhealthy software environment.
-`ssdwtf` measures all of that directly — SMART wear from the drive's own
+`wtfssd` measures all of that directly — SMART wear from the drive's own
 counters, not vibes — and gives you the cleanup and guardrails the IDEs don't.
 
 ## Requirements
@@ -38,38 +38,38 @@ counters, not vibes — and gives you the cleanup and guardrails the IDEs don't.
 From source, no install needed:
 
 ```sh
-git clone <this repo> && cd ssdwtf
-python3 -m ssdwtf scan
+git clone <this repo> && cd wtfssd
+python3 -m wtfssd scan
 ```
 
-Or install the `ssdwtf` command into an isolated environment:
+Or install the `wtfssd` command into an isolated environment:
 
 ```sh
 pipx install .
-ssdwtf scan
+wtfssd scan
 ```
 
 ## Quick start
 
 ```sh
-ssdwtf scan              # full health report: SMART, storage, swap, ghost
+wtfssd scan              # full health report: SMART, storage, swap, ghost
                          # processes, agentic-state sizes, findings, health score
-ssdwtf scan --json       # same, machine-readable
-ssdwtf scan --fast       # fast tier only (skips state-dir sizing, APFS
+wtfssd scan --json       # same, machine-readable
+wtfssd scan --fast       # fast tier only (skips state-dir sizing, APFS
                          # snapshots, crashes, churn, fds, secrets,
                          # logs, gitwatch); watch --fast likewise
-ssdwtf clean             # dry-run: lists what *would* be cleaned, deletes nothing
-ssdwtf clean cursor-caches --apply   # actually clean (moves to Trash)
-ssdwtf optimize ignore ~/my-project  # write/merge .cursorignore churn rules
-ssdwtf optimize headroom             # free-space floor status + top consumers
-ssdwtf optimize install-agent        # background monitoring: two LaunchAgents,
+wtfssd clean             # dry-run: lists what *would* be cleaned, deletes nothing
+wtfssd clean cursor-caches --apply   # actually clean (moves to Trash)
+wtfssd optimize ignore ~/my-project  # write/merge .cursorignore churn rules
+wtfssd optimize headroom             # free-space floor status + top consumers
+wtfssd optimize install-agent        # background monitoring: two LaunchAgents,
                                      # hourly full watch + 5-min fast-tier watch
-ssdwtf watch --once      # single monitor pass + Notification Center alerts
-ssdwtf history           # trend table built from past scans
-ssdwtf digest            # one-look daily summary: domain statuses, key deltas
+wtfssd watch --once      # single monitor pass + Notification Center alerts
+wtfssd history           # trend table built from past scans
+wtfssd digest            # one-look daily summary: domain statuses, key deltas
                          # (TB written, swap, state, logs, backup age), findings
-ssdwtf digest --json     # same, machine-readable (--days N widens the window)
-ssdwtf config --show     # effective config (defaults + your overrides)
+wtfssd digest --json     # same, machine-readable (--days N widens the window)
+wtfssd config --show     # effective config (defaults + your overrides)
 ```
 
 Exit codes for `scan` / `watch --once` / `digest`: `0` no findings,
@@ -84,7 +84,7 @@ dependencies) that puts the health score and grade in the menu bar —
 popover shows a hero score + grade, a VITALS strip, all ten domains with
 status markers, the current findings, and Full Scan / Digest / Quit
 actions (scan and digest open in Terminal). It refreshes every 60 seconds
-from `ssdwtf scan --fast --json --no-history`; everything it does is
+from `wtfssd scan --fast --json --no-history`; everything it does is
 read-only.
 
 ```sh
@@ -92,18 +92,18 @@ cd menubar && ./build.sh        # builds build/WTFSSDMonitor.app
 open build/WTFSSDMonitor.app
 ```
 
-The app prefers an installed `ssdwtf` command; from a source checkout it
-falls back to `python3 -m ssdwtf` with the repo root as working directory
+The app prefers an installed `wtfssd` command; from a source checkout it
+falls back to `python3 -m wtfssd` with the repo root as working directory
 (the repo path is baked into the app at build time, so rebuild if you move
 the checkout).
 
 A SwiftBar/xbar plugin alternative remains at
-`contrib/swiftbar/ssdwtf.5m.py` — same data, rendered as a text dropdown
+`contrib/swiftbar/wtfssd.5m.py` — same data, rendered as a text dropdown
 inside SwiftBar instead of a native popover.
 
 ## Safety model
 
-`ssdwtf` is built to be less scary than the problem it diagnoses:
+`wtfssd` is built to be less scary than the problem it diagnoses:
 
 - **Dry-run by default.** `clean` never touches a file unless you pass `--apply`.
 - **Trash, not `rm`.** Applied cleans move items to `~/.Trash` so you can
@@ -111,12 +111,12 @@ inside SwiftBar instead of a native popover.
 - **App guards.** Cleaning a target whose owning app is running (e.g. Cursor)
   is skipped with an explanation; `--force` overrides.
 - **Backup-first.** High-risk targets (the Cursor chat database) are copied to
-  `~/.local/share/ssdwtf/backups/` before removal.
+  `~/.local/share/wtfssd/backups/` before removal.
 - **Denylist.** Paths outside your home directory, your home directory itself,
   and `Documents`/`Desktop`/`Movies`/`Music`/`Pictures` are never touched.
 - **Read-only monitoring.** `scan`, `watch`, `history`, and `config` only read
   the system; the only writes are scan history, the metrics baseline, alert
-  state, and churn/launchd baselines under `~/.local/share/ssdwtf`.
+  state, and churn/launchd baselines under `~/.local/share/wtfssd`.
 - **Opt-in secrets scanning.** The secrets scanner does nothing unless you
   set `secrets.enabled: true`. It reports only the file path, line number,
   and which rule matched — the matched value is never displayed or stored.
@@ -124,7 +124,7 @@ inside SwiftBar instead of a native popover.
 ## Configuration
 
 Defaults live in the code; override any of them in
-`~/.config/ssdwtf/config.json` (see the path with `ssdwtf config --path`).
+`~/.config/wtfssd/config.json` (see the path with `wtfssd config --path`).
 Only the keys you set are overridden — everything is deep-merged with defaults.
 
 Example — alert on swap earlier than the 8 GB default:
@@ -153,12 +153,12 @@ and skips), `backup.enabled` / `backup.warn_hours` / `backup.crit_hours`
 paths, line numbers, and rule names only, never the matched values),
 `spotlight.warn_cpu_pct`, `logs.warn_gb_day` / `logs.extra_dirs`,
 `git.repos` (repositories watched for uncommitted/unpushed work) /
-`git.warn_changes` / `git.warn_unpushed`. Run `ssdwtf config --show` for the
+`git.warn_changes` / `git.warn_unpushed`. Run `wtfssd config --show` for the
 full merged picture.
 
 ## How it works
 
-- `ssdwtf/collectors/` — read-only probes: SMART (`smartctl`, including the
+- `wtfssd/collectors/` — read-only probes: SMART (`smartctl`, including the
   NVMe critical-warning flag and the device-reported spare threshold), swap
   (`sysctl`), disk (`df -k`, 1K-blocks converted to decimal GB), processes
   (`ps`, including the per-IDE RSS feed behind leak-slope detection), agentic
@@ -175,7 +175,7 @@ full merged picture.
   diff vs a stored baseline), Spotlight indexer load (`ps` / `mdutil`), log
   growth (`~/Library/Logs` sizing), uncommitted/unpushed work (read-only
   `git status` over configured repos), and the opt-in secrets scanner.
-- `ssdwtf/analyze.py` — turns a report + history into severity-ranked
+- `wtfssd/analyze.py` — turns a report + history into severity-ranked
   findings, plus a status for each of the ten domains shown above the
   findings: drive, backup, headroom, memory, processes, state, stability,
   telemetry, privacy, work (`ok` / `warn` / `critical`, or `unknown` when a
@@ -184,21 +184,21 @@ full merged picture.
   *sustained* — a majority of samples over `pressure.sustained_min`
   minutes — so a momentary spike doesn't alert; level-4 critical pressure
   always fires immediately.
-- `ssdwtf/history.py` — JSONL scan history for trend and growth-rate analysis.
-- `ssdwtf/metrics.py` — sqlite baseline store
-  (`~/.local/share/ssdwtf/metrics.db`); every scan/watch pass records its
+- `wtfssd/history.py` — JSONL scan history for trend and growth-rate analysis.
+- `wtfssd/metrics.py` — sqlite baseline store
+  (`~/.local/share/wtfssd/metrics.db`); every scan/watch pass records its
   metrics there alongside the JSONL history.
-- `ssdwtf/alerts.py` — Notification Center via `osascript`, transition-based
+- `wtfssd/alerts.py` — Notification Center via `osascript`, transition-based
   so it doesn't nag: a finding notifies when it's new, when its severity
   escalates since the last notification (a warn→critical jump notifies
   immediately, even inside the warn cooldown), or when its per-severity
   cooldown elapses — warn findings re-notify at most every
   `alerts.cooldown_hours` (24 h), critical ones every
   `alerts.cooldown_critical_hours` (4 h). Info findings never notify.
-- `ssdwtf/cleaners.py` — guarded, dry-run-first cleanup targets.
-- `ssdwtf/optimize.py` — `.cursorignore` merging and the LaunchAgents
+- `wtfssd/cleaners.py` — guarded, dry-run-first cleanup targets.
+- `wtfssd/optimize.py` — `.cursorignore` merging and the LaunchAgents
   (hourly full watch plus a 5-minute fast-tier watcher).
-- `ssdwtf/cli.py` — the `ssdwtf` command.
+- `wtfssd/cli.py` — the `wtfssd` command.
 
 ## Tests
 

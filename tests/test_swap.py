@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from ssdwtf.collectors import swap
+from wtfssd.collectors import swap
 
 FIXTURE = (Path(__file__).parent / "fixtures" / "sysctl_swap.txt").read_text()
 BIG = "vm.swapusage: total = 2048.00M  used = 1536.25M  free = 511.75M  (encrypted)"

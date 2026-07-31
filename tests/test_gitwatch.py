@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssdwtf.collectors import gitwatch
+from wtfssd.collectors import gitwatch
 
 
 def _runner_for(status="", remotes="origin\n", log="abc123 work\n"):

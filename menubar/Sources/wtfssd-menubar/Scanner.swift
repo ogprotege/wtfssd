@@ -1,4 +1,4 @@
-// Scanner.swift — runs ssdwtf scans and parses payloads. Read-only.
+// Scanner.swift — runs wtfssd scans and parses payloads. Read-only.
 //
 // Two tiers: fast scans (every refresh tick, ~2 s) feed the title and
 // vitals; full scans (every 15 min, and on first detail open) feed the
@@ -91,7 +91,7 @@ final class Scanner {
     let repoRoot: String
 
     init() {
-        repoRoot = Bundle.main.infoDictionary?["SSDWTFRepoRoot"] as? String
+        repoRoot = Bundle.main.infoDictionary?["WTFSSDRepoRoot"] as? String
             ?? ("\(NSHomeDirectory())/wtfssd")
     }
 
@@ -99,14 +99,14 @@ final class Scanner {
         var args = ["scan", "--json", "--no-history"]
         if fast { args.insert("--fast", at: 1) }
         let (exe, finalArgs, cwd): (String, [String], String?) = {
-            if let which = try? run("/usr/bin/which", ["ssdwtf"], cwd: nil,
+            if let which = try? run("/usr/bin/which", ["wtfssd"], cwd: nil,
                                     timeout: 10),
                which.status == 0,
                !which.stdout.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return (which.stdout.trimmingCharacters(in: .whitespacesAndNewlines),
                         args, nil)
             }
-            return ("/usr/bin/env", ["python3", "-m", "ssdwtf"] + args, repoRoot)
+            return ("/usr/bin/env", ["python3", "-m", "wtfssd"] + args, repoRoot)
         }()
         let result = try run(exe, finalArgs, cwd: cwd, timeout: fast ? 60 : 120)
         guard let data = result.stdout.data(using: .utf8),

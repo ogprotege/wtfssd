@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from ssdwtf.collectors import smart
+from wtfssd.collectors import smart
 
 FIXTURE = (Path(__file__).parent / "fixtures" / "smartctl.txt").read_text()
 

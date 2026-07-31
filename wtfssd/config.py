@@ -45,11 +45,11 @@ DEFAULTS: dict[str, Any] = {
 
 
 def config_path() -> Path:
-    return Path.home() / ".config" / "ssdwtf" / "config.json"
+    return Path.home() / ".config" / "wtfssd" / "config.json"
 
 
 def data_dir() -> Path:
-    return Path.home() / ".local" / "share" / "ssdwtf"
+    return Path.home() / ".local" / "share" / "wtfssd"
 
 
 def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:

@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssdwtf.collectors import mcp
+from wtfssd.collectors import mcp
 
 CONFIG = {"mcpServers": {
     "firecrawl": {"command": "node", "args": ["/opt/fc/dist/index.js"]},

@@ -1,4 +1,4 @@
-# ssdwtf — Design Spec
+# wtfssd — Design Spec
 
 Date: 2026-07-30
 Source article: `IDEA-SSD.txt` — "My MacBook Aged Three Years in Three Months of Vibe Coding"
@@ -10,7 +10,7 @@ they drown them in **unbounded local state**: runaway swap, ghost helper process
 chat databases, churning snapshot files, and evaporating free-space headroom. The drive's own
 SMART accounting is the only honest wear signal, and it almost always says "healthy".
 
-`ssdwtf` is a macOS tool that operationalizes the article's "What I changed" section. It has
+`wtfssd` is a macOS tool that operationalizes the article's "What I changed" section. It has
 four pillars:
 
 - **Monitor** — SMART wear, swap, free headroom, ghost IDE processes, state-directory sizes
@@ -34,21 +34,21 @@ deleting anything under user project folders other than explicitly stale `node_m
   works without sudo), `sysctl`, `df`, `ps`, `du`, `osascript` (notifications).
 - Every external dependency degrades gracefully: missing `smartctl` produces a "install
   smartmontools" note, not a crash.
-- Runnable as `python3 -m ssdwtf` from the repo, or installed via `pipx/pip install .`
-  exposing a `ssdwtf` console script.
+- Runnable as `python3 -m wtfssd` from the repo, or installed via `pipx/pip install .`
+  exposing a `wtfssd` console script.
 
 ## 3. Architecture
 
 ```
-ssdwtf/
+wtfssd/
   pyproject.toml
   README.md
-  ssdwtf/
+  wtfssd/
     __init__.py            # version
     __main__.py            # entry: from .cli import main; main()
     cli.py                 # argparse: scan | clean | watch | optimize | history | config
     models.py              # dataclasses shared across all modules (the contract)
-    config.py              # load/merge ~/.config/ssdwtf/config.json over defaults
+    config.py              # load/merge ~/.config/wtfssd/config.json over defaults
     collectors/
       __init__.py
       _run.py              # run_cmd(): subprocess wrapper (timeout, no shell, text, never raises)
@@ -58,7 +58,7 @@ ssdwtf/
       processes.py         # ps -eo pid,ppid,etime,rss,comm → ghost IDE helpers → ProcessReport
       statedirs.py         # known state dirs, state.vscdb, *.pack counts/sizes → StateDirReport
     analyze.py             # reports + config + history → list[Finding] + health score 0–100
-    history.py             # JSONL append/read at ~/.local/share/ssdwtf/history.jsonl; trends
+    history.py             # JSONL append/read at ~/.local/share/wtfssd/history.jsonl; trends
     alerts.py              # Finding → osascript notification; cooldown state file
     cleaners.py            # CleanupTarget registry + dry-run/apply engine (Trash, guards)
     optimize.py            # .cursorignore writer, LaunchAgent plist install/uninstall
@@ -122,7 +122,7 @@ A/B/C/D/F at 90/75/60/40.
 
 - `osascript -e 'display notification ...'` per warn/critical finding; info findings never notify.
 - Cooldown: per finding `code`, default 24 h (`alerts.cooldown_hours`), state in
-  `~/.local/share/ssdwtf/alert_state.json`. Notification failure → print to stdout, never crash.
+  `~/.local/share/wtfssd/alert_state.json`. Notification failure → print to stdout, never crash.
 - `watch` mode: loop every `watch.interval_minutes` (default 60), append history, analyze, alert.
   `--once` runs a single pass (what the LaunchAgent calls).
 
@@ -130,13 +130,13 @@ A/B/C/D/F at 90/75/60/40.
 
 Safety model (from the article's two rules: quit the app first; copy before delete):
 
-1. **Dry-run by default.** `ssdwtf clean` only prints sizes. `--apply` performs.
+1. **Dry-run by default.** `wtfssd clean` only prints sizes. `--apply` performs.
 2. **Trash, not `rm`.** Applied items move to `~/.Trash` (name-suffixed on collision) — reversible.
    `--hard` skips Trash (explicit opt-in only).
 3. **Running-app guard.** If the owning app (e.g. Cursor) is running, the target is skipped with a
    message unless `--force`.
 4. **Backup-first for databases.** `state.vscdb` targets copy the file to
-   `~/.local/share/ssdwtf/backups/<timestamp>/` before moving to Trash.
+   `~/.local/share/wtfssd/backups/<timestamp>/` before moving to Trash.
 5. **Denylist.** Paths under `~/Documents`, `~/Desktop`, `~/Pictures`, home root itself, and any
    path outside `$HOME` are refused outright.
 
@@ -144,7 +144,7 @@ Targets (each: id, title, paths, risk level, owner-app guard, notes):
 
 - `cursor-caches` — Application Support/Cursor/{Cache,CachedData,CachedExtensionVSIXs,Code Cache,logs,Service Worker}; guard: Cursor.
 - `cursor-vscdb-backups` — `state.vscdb.backup*` (not the live DB); guard: Cursor.
-- `cursor-vscdb` — live `state.vscdb`; **opt-in only** (`ssdwtf clean cursor-vscdb --apply`),
+- `cursor-vscdb` — live `state.vscdb`; **opt-in only** (`wtfssd clean cursor-vscdb --apply`),
   backup-first, guard: Cursor; warns that local chat history is lost.
 - `cursor-snapshots` — files matching `*.pack` under `~/.cursor` and under
   `Application Support/Cursor/CachedData`; report-only in v1 unless `--apply` with guard
@@ -161,27 +161,27 @@ Targets (each: id, title, paths, risk level, owner-app guard, notes):
 
 ### 4.4 Optimize (optimize.py)
 
-- `ssdwtf optimize ignore [path …]` — write/merge `.cursorignore` at given project roots
+- `wtfssd optimize ignore [path …]` — write/merge `.cursorignore` at given project roots
   (default: cwd) with: `node_modules/`, `dist/`, `build/`,
   `.next/`, `out/`, `*.log`, `.turbo/`, `coverage/`. Merge = append missing lines under a
-  `# ssdwtf` marker block; never clobbers user content.
-- `ssdwtf optimize headroom` — prints current free %, the 15–25% floor, and the top space
-  consumers among monitored targets with the exact `ssdwtf clean <id>` command for each.
-- `ssdwtf optimize install-agent` / `uninstall-agent` — writes
-  `~/Library/LaunchAgents/com.ssdwtf.watch.plist` running `ssdwtf watch --once` hourly
+  `# wtfssd` marker block; never clobbers user content.
+- `wtfssd optimize headroom` — prints current free %, the 15–25% floor, and the top space
+  consumers among monitored targets with the exact `wtfssd clean <id>` command for each.
+- `wtfssd optimize install-agent` / `uninstall-agent` — writes
+  `~/Library/LaunchAgents/com.wtfssd.watch.plist` running `wtfssd watch --once` hourly
   (`StartInterval` 3600), `launchctl bootstrap/bootout` to load/unload.
 - SMART habit: `watch` emits an info finding on the 1st of each month reminding to review wear
-  trend (`ssdwtf history`).
+  trend (`wtfssd history`).
 
 ## 5. CLI Surface
 
 ```
-ssdwtf scan [--json] [--no-history] [--fast]   full health report; appends to history by default
-ssdwtf watch [--once] [--interval N] [--fast]  monitor loop (or single pass) + alerts
-ssdwtf clean [target …] [--apply] [--hard] [--force] [--json]
-ssdwtf optimize ignore [path …] | headroom | install-agent | uninstall-agent
-ssdwtf history [--last N] [--json]           trend table: TB written, % used, free space, swap
-ssdwtf config --show | --path                effective config
+wtfssd scan [--json] [--no-history] [--fast]   full health report; appends to history by default
+wtfssd watch [--once] [--interval N] [--fast]  monitor loop (or single pass) + alerts
+wtfssd clean [target …] [--apply] [--hard] [--force] [--json]
+wtfssd optimize ignore [path …] | headroom | install-agent | uninstall-agent
+wtfssd history [--last N] [--json]           trend table: TB written, % used, free space, swap
+wtfssd config --show | --path                effective config
 ```
 
 `scan` and `watch` accept `--fast`: fast tier only — skips the slow collectors
@@ -193,7 +193,7 @@ Exit codes: 0 ok / no findings; 1 warnings only; 2 any critical; 3 usage/interna
 
 ## 6. Config
 
-`~/.config/ssdwtf/config.json`, deep-merged over built-in defaults (every threshold in §4.1/4.2/4.3
+`~/.config/wtfssd/config.json`, deep-merged over built-in defaults (every threshold in §4.1/4.2/4.3
 is a key). Missing file = defaults. Invalid JSON = warning + defaults, never a crash.
 
 ## 7. Error Handling
@@ -204,8 +204,8 @@ is a key). Missing file = defaults. Invalid JSON = warning + defaults, never a c
   callers translate to `available=False` reports or note-bearing findings.
 - Any collector failure still yields a complete report (partial data + note findings) — the tool
   exists to reduce panic, so it must never be a source of it.
-- All file mutations confined to: `~/.config/ssdwtf/`, `~/.local/share/ssdwtf/`,
-  `~/Library/LaunchAgents/com.ssdwtf.watch.plist`, explicit Trash moves, explicit ignore-file
+- All file mutations confined to: `~/.config/wtfssd/`, `~/.local/share/wtfssd/`,
+  `~/Library/LaunchAgents/com.wtfssd.watch.plist`, explicit Trash moves, explicit ignore-file
   merges. Nothing else. Ever.
 
 ## 8. Testing
@@ -217,8 +217,8 @@ is a key). Missing file = defaults. Invalid JSON = warning + defaults, never a c
   sandboxes; alerts tested with a stub notifier; no test touches the real `$HOME` (env vars
   overridden).
 - CLI: smoke tests via `cli.main(argv)` with mocked collectors.
-- Verification gate before "done": full suite green + a real `python3 -m ssdwtf scan` and
-  `python3 -m ssdwtf clean` (dry-run) executed on this machine and eyeballed.
+- Verification gate before "done": full suite green + a real `python3 -m wtfssd scan` and
+  `python3 -m wtfssd clean` (dry-run) executed on this machine and eyeballed.
 
 ## 9. Build Plan (agents)
 

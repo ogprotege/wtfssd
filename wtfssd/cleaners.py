@@ -196,7 +196,7 @@ def _trash_dest(path: Path, home: Path) -> Path:
     trash.mkdir(exist_ok=True)
     dest = trash / path.name
     if dest.exists():
-        dest = trash / f"{path.name}.ssdwtf-{datetime.now():%Y%m%d%H%M%S}"
+        dest = trash / f"{path.name}.wtfssd-{datetime.now():%Y%m%d%H%M%S}"
     return dest
 
 

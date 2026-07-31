@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from ssdwtf.collectors import fds
+from wtfssd.collectors import fds
 
 LSOF = """COMMAND     PID  USER   FD   TYPE DEVICE SIZE/OFF NODE NAME
 Cursor     1001 biscuit cwd  DIR  1,4      640  123 /

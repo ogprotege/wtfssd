@@ -5,12 +5,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssdwtf import config
+from wtfssd import config
 
 
 class TestConfig(unittest.TestCase):
     def test_defaults_when_missing(self):
-        cfg, warn = config.load_config(Path("/nonexistent/ssdwtf/config.json"))
+        cfg, warn = config.load_config(Path("/nonexistent/wtfssd/config.json"))
         self.assertIsNone(warn)
         self.assertEqual(cfg["swap"]["warn_gb"], 8.0)
         self.assertEqual(cfg["disk"]["mount"], "/System/Volumes/Data")

@@ -152,7 +152,7 @@ def cmd_watch(args: argparse.Namespace) -> int:
               f"{len(findings)} finding(s), {len(notified)} notified")
         return code
     interval = args.interval or config["watch"]["interval_minutes"]
-    print(f"ssdwtf watching every {interval} min — Ctrl-C to stop")
+    print(f"wtfssd watching every {interval} min — Ctrl-C to stop")
     while True:
         rep, findings, _ = _run_scan(config, use_history=True, fast=args.fast)
         notified = alerts.alert(findings, config)
@@ -228,7 +228,7 @@ def cmd_optimize(args: argparse.Namespace) -> int:
                 if entry.exists:
                     print(f"  {report_mod.format_bytes(entry.size_bytes):>10}  "
                           f"{entry.key}")
-            print("see: ssdwtf clean")
+            print("see: wtfssd clean")
         return 0
     if args.opt_command == "install-agent":
         path, loaded = optimize.install_agent()
@@ -244,7 +244,7 @@ def cmd_optimize(args: argparse.Namespace) -> int:
         return 0
     if args.opt_command == "uninstall-agent":
         removed = optimize.uninstall_agent()
-        fast_removed = optimize.uninstall_agent(label="com.ssdwtf.watch.fast")
+        fast_removed = optimize.uninstall_agent(label="com.wtfssd.watch.fast")
         n = int(removed) + int(fast_removed)
         print(f"{n} agent(s) removed" if n else "no agent installed")
         return 0
@@ -306,7 +306,7 @@ def cmd_config(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="ssdwtf",
+        prog="wtfssd",
         description="Why is my Mac's SSD busy/full/'dying' — monitor, alert, "
                     "clean, optimize.")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -373,5 +373,5 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         return 3
     except Exception as exc:  # the anti-panic tool must not panic
-        print(f"ssdwtf: internal error: {exc}", file=sys.stderr)
+        print(f"wtfssd: internal error: {exc}", file=sys.stderr)
         return 3

@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssdwtf.collectors import crashes
+from wtfssd.collectors import crashes
 
 NOW = 1_785_500_000.0
 APPS = ["Cursor", "Claude"]

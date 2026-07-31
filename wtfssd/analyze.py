@@ -86,13 +86,13 @@ def analyze(report: HealthReport, history: list[HealthReport],
         findings.append(_f("monitor", "info", "smart.wear_info",
             f"SSD wear: {pct} of rated life used",
             f"{tb} over {hrs} power-on hours. The drive's own accounting is the only honest wear signal.",
-            "Check monthly: `ssdwtf history`."))
+            "Check monthly: `wtfssd history`."))
         rate = gb_written_per_day(history)
         if rate is not None and rate >= cfg_smart["writes_warn_gb_day"]:
             findings.append(_f("monitor", "warn", "smart.write_rate",
                 f"High write volume: ~{rate:.0f} GB/day",
                 "Sustained writes at this rate are usually swap thrash or snapshot churn, not wear-out.",
-                "Check swap (`ssdwtf scan`) and add ignore rules: `ssdwtf optimize ignore`.",
+                "Check swap (`wtfssd scan`) and add ignore rules: `wtfssd optimize ignore`.",
                 evidence="derived"))
 
     # --- Swap ---
@@ -116,12 +116,12 @@ def analyze(report: HealthReport, history: list[HealthReport],
             findings.append(_f("monitor", "critical", "disk.critical",
                 f"Critically low free space: {free_pct:.0f}%",
                 f"{report.disk.avail_gb:.0f} GB free of {report.disk.size_gb:.0f} GB. Below the floor where macOS and the SSD controller struggle.",
-                "Run `ssdwtf clean` and aim for 15-25% free."))
+                "Run `wtfssd clean` and aim for 15-25% free."))
         elif free_pct < cfg_disk["warn_free_pct"]:
             findings.append(_f("monitor", "warn", "disk.low",
                 f"Low free space: {free_pct:.0f}%",
                 f"{report.disk.avail_gb:.0f} GB free of {report.disk.size_gb:.0f} GB.",
-                "Run `ssdwtf clean` to restore the 15-25% headroom floor."))
+                "Run `wtfssd clean` to restore the 15-25% headroom floor."))
 
     # --- Ghost processes ---
     procs = report.processes
@@ -145,19 +145,19 @@ def analyze(report: HealthReport, history: list[HealthReport],
         findings.append(_f("clean", "warn", "state.vscdb_large",
             f"Cursor chat database is {vscdb_gb:.1f} GB",
             "state.vscdb grows ~1 GB/day for heavy users, with no retention policy.",
-            "Quit Cursor, then `ssdwtf clean cursor-vscdb-backups --apply` (and consider cursor-vscdb)."))
+            "Quit Cursor, then `wtfssd clean cursor-vscdb-backups --apply` (and consider cursor-vscdb)."))
     total_gb = sd.total_bytes / GB
     if total_gb >= cfg_state["total_warn_gb"]:
         findings.append(_f("clean", "warn", "state.total_large",
             f"Agentic/tooling state totals {total_gb:.0f} GB",
             "Unbounded local state with no retention policy.",
-            "Run `ssdwtf clean` to see safe reclaim targets."))
+            "Run `wtfssd clean` to see safe reclaim targets."))
     growth = state_growth_gb_per_day(history)
     if growth is not None and growth >= cfg_state["growth_warn_gb_day"]:
         findings.append(_f("clean", "warn", "state.growth",
             f"State growing ~{growth:.1f} GB/day",
             "At this rate a small drive fills in weeks.",
-            "Constrain the indexer: `ssdwtf optimize ignore` in each project root.",
+            "Constrain the indexer: `wtfssd optimize ignore` in each project root.",
             evidence="derived"))
 
     # --- Monthly SMART habit ---
@@ -166,7 +166,7 @@ def analyze(report: HealthReport, history: list[HealthReport],
             findings.append(_f("monitor", "info", "smart.monthly_check",
                 "Monthly SSD check",
                 "The habit that replaces doomscrolling: look at the drive's own accounting.",
-                "`ssdwtf history` to see the wear trend."))
+                "`wtfssd history` to see the wear trend."))
     except ValueError:
         pass
 
@@ -338,7 +338,7 @@ def analyze(report: HealthReport, history: list[HealthReport],
             findings.append(_f("clean", "warn", "state.churn",
                 f"Snapshot churn: +{ch.added} −{ch.removed} .pack files since last scan",
                 f"{ch.pack_count} packs, {ch.pack_bytes / 1e9:.1f} GB now, +{ch.added_bytes / 1e9:.1f} GB new. Create-destroy churn is write volume that never shows as missing space.",
-                "Constrain the indexer: `ssdwtf optimize ignore` in each project root."))
+                "Constrain the indexer: `wtfssd optimize ignore` in each project root."))
 
     # --- File descriptors ---
     fd = report.fds
@@ -382,7 +382,7 @@ def analyze(report: HealthReport, history: list[HealthReport],
                         sorted(by_rule.items(), key=lambda t: -t[1])[:3])
         findings.append(_f("monitor", "warn", "secrets.exposed",
             f"{len(se.matches)} credential pattern(s) at rest in agent state ({top})",
-            f"Example location: {se.matches[0].path}:{se.matches[0].line}. Values are never displayed or stored by ssdwtf.",
+            f"Example location: {se.matches[0].path}:{se.matches[0].line}. Values are never displayed or stored by wtfssd.",
             "Rotate the exposed keys; move secrets to env vars or a manager."))
 
     # --- Retention posture ---
@@ -442,7 +442,7 @@ def analyze(report: HealthReport, history: list[HealthReport],
             findings.append(_f("monitor", "warn", "work.uncommitted",
                 f"{r.path}: {r.uncommitted} changed + {r.untracked} untracked files",
                 "Large uncommitted work is one agent mistake away from loss.",
-                "Commit or stash; ssdwtf will never push for you."))
+                "Commit or stash; wtfssd will never push for you."))
         unpushed = [r for r in gw.repos if r.error is None
                     and r.unpushed >= cfg_git.get("warn_unpushed", 10)]
         if unpushed:
@@ -450,7 +450,7 @@ def analyze(report: HealthReport, history: list[HealthReport],
             findings.append(_f("monitor", "warn", "work.unpushed",
                 f"{r.path}: {r.unpushed} commits not on any remote",
                 "Local-only commits are single-point-of-failure work.",
-                "Push when ready; ssdwtf only reports."))
+                "Push when ready; wtfssd only reports."))
 
     return findings
 

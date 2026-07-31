@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssdwtf.collectors import logs
+from wtfssd.collectors import logs
 
 
 class TestLogs(unittest.TestCase):

@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from ssdwtf.collectors import processes
+from wtfssd.collectors import processes
 
 FIXTURE = (Path(__file__).parent / "fixtures" / "ps.txt").read_text()
 

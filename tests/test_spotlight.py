@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from ssdwtf.collectors import spotlight
+from wtfssd.collectors import spotlight
 
 PS = """%CPU COMM
 0.0 launchd

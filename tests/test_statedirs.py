@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssdwtf.collectors import statedirs
+from wtfssd.collectors import statedirs
 
 
 class TestDirSize(unittest.TestCase):

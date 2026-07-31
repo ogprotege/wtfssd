@@ -1,12 +1,12 @@
-# ssdwtf — Monitor Expansion Design Spec
+# wtfssd — Monitor Expansion Design Spec
 
-Companion to `2026-07-30-ssdwtf-design.md` (the base spec). Everything in the
+Companion to `2026-07-30-wtfssd-design.md` (the base spec). Everything in the
 base spec still holds; this document extends it. Where the two disagree, this
 document wins and the base spec should be patched in the same change.
 
 Source requirements: `My-tool-mon_ideas.txt` (30 specced monitors + monitoring
 inventory) diffed against the shipped v0.1.0. The package name stays
-`ssdwtf` — pyproject, tests, and the console script all use it; `wtfssd` is
+`wtfssd` — pyproject, tests, and the console script all use it; `wtfssd` is
 only the repo/checkout name.
 
 ## 1. Purpose
@@ -59,7 +59,7 @@ decision (menu bar poller may replace it).
 
 ### 3.2 Metrics store (metrics.py — new)
 
-Stdlib `sqlite3` at `~/.local/share/ssdwtf/metrics.db`. One table:
+Stdlib `sqlite3` at `~/.local/share/wtfssd/metrics.db`. One table:
 
 ```sql
 CREATE TABLE IF NOT EXISTS samples (
@@ -120,7 +120,7 @@ domain makes overall exit code 2 as today.
 
 ## 4. New collectors (Phase 1)
 
-All in `ssdwtf/collectors/`, all with module-level `parse_*` (pure) +
+All in `wtfssd/collectors/`, all with module-level `parse_*` (pure) +
 `collect_*` (runner-injected) following the smart.py pattern. New frozen
 dataclasses added to models.py (additive, with defaults — see §7).
 
@@ -178,10 +178,10 @@ Warning`, `Available Spare Threshold`, `Unsafe Shutdowns`, and composite
 
 ## 6. CLI surface (Phase 1 additions)
 
-- `ssdwtf scan [--json] [--fast]` — `--fast` runs the fast tier only;
+- `wtfssd scan [--json] [--fast]` — `--fast` runs the fast tier only;
   skipped slow collectors appear in JSON as `available: false` with
   `note: "not collected (--fast)"`, never as zero.
-- `ssdwtf watch [--once] [--fast]` — same tier split.
+- `wtfssd watch [--once] [--fast]` — same tier split.
 - Exit codes unchanged (0/1/2/3). `unknown` domains do not affect exit code.
 
 ## 7. models.py changes (additive — the only contract edit)
@@ -236,7 +236,7 @@ except where a task explicitly extends a fixture/model.
 
 Phase 2 adds process-lifecycle depth, privacy/retention auditing, and
 work-loss protection. Same constraints: stdlib only, no sudo, never raise,
-read-only (the only writes are state files under `~/.local/share/ssdwtf/`).
+read-only (the only writes are state files under `~/.local/share/wtfssd/`).
 
 ### 10.1 New collectors
 
@@ -343,7 +343,7 @@ fast-tier poller agent.
 
 ### 11.3 Digest (cli + report)
 
-- `ssdwtf digest [--days N] [--json]` — one-look daily summary from
+- `wtfssd digest [--days N] [--json]` — one-look daily summary from
   metrics + history: all-time scan count, per-domain current status, key
   deltas (TB written, latest swap, state GB, logs GB, backup age), and the
   current findings count by severity. Performs (and records) a fresh scan
@@ -352,21 +352,21 @@ fast-tier poller agent.
 ### 11.4 Fast-tier poller agent (optimize.py)
 
 - `install_fast_agent()` writes a second LaunchAgent
-  `com.ssdwtf.watch.fast.plist` running `watch --once --fast` every
+  `com.wtfssd.watch.fast.plist` running `watch --once --fast` every
   `watch.fast_interval_minutes` (5, new config key; StartInterval seconds).
   `optimize install-agent` now installs both agents and prints both results;
   `uninstall-agent` removes both. `install_agent()` signature unchanged.
 
-### 11.5 Menu-bar plugin (contrib/swiftbar/ssdwtf.5m.py)
+### 11.5 Menu-bar plugin (contrib/swiftbar/wtfssd.5m.py)
 
 **Superseded by:** the native Swift menu bar app at `menubar/` (SwiftUI
 popover) is now the primary menu-bar surface. This SwiftBar plugin remains
 as a lightweight alternative for users who already run SwiftBar/xbar.
 
 - SwiftBar/xbar-compatible plugin, stdlib Python 3, executable. Runs
-  `ssdwtf scan --fast --json --no-history` (resolves the package by trying
-  the `ssdwtf` console script, then `python3 -m ssdwtf` with cwd = repo root
-  derived from the plugin's real path). Test hook: `SSDWTF_JSON` env var
+  `wtfssd scan --fast --json --no-history` (resolves the package by trying
+  the `wtfssd` console script, then `python3 -m wtfssd` with cwd = repo root
+  derived from the plugin's real path). Test hook: `WTFSSD_JSON` env var
   bypasses the subprocess with a canned payload.
 - Menu bar title: `SSD:<grade>` colored by worst severity (green/yellow/red/
   gray for unknown). Dropdown: score, ten domains with status markers,

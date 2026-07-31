@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from ssdwtf.collectors import smart, smartext
+from wtfssd.collectors import smart, smartext
 
 FIX = Path(__file__).parent / "fixtures"
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from ssdwtf import models
+from wtfssd import models
 
 
 def sample_report() -> models.HealthReport:

@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from ssdwtf.collectors import disk
+from wtfssd.collectors import disk
 
 FIXTURE = (Path(__file__).parent / "fixtures" / "df.txt").read_text()
 
