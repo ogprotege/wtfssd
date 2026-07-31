@@ -24,9 +24,11 @@ _DOMAIN_BY_PREFIX = {
 
 
 def _f(pillar: str, severity: str, code: str, title: str,
-       detail: str, recommendation: str) -> Finding:
+       detail: str, recommendation: str,
+       evidence: str = "measured") -> Finding:
     return Finding(pillar=pillar, severity=severity, code=code,
-                   title=title, detail=detail, recommendation=recommendation)
+                   title=title, detail=detail, recommendation=recommendation,
+                   evidence=evidence)
 
 
 def analyze(report: HealthReport, history: list[HealthReport],
@@ -83,7 +85,8 @@ def analyze(report: HealthReport, history: list[HealthReport],
             findings.append(_f("monitor", "warn", "smart.write_rate",
                 f"High write volume: ~{rate:.0f} GB/day",
                 "Sustained writes at this rate are usually swap thrash or snapshot churn, not wear-out.",
-                "Check swap (`ssdwtf scan`) and add ignore rules: `ssdwtf optimize ignore`."))
+                "Check swap (`ssdwtf scan`) and add ignore rules: `ssdwtf optimize ignore`.",
+                evidence="derived"))
 
     # --- Swap ---
     if report.swap is not None:
@@ -147,7 +150,8 @@ def analyze(report: HealthReport, history: list[HealthReport],
         findings.append(_f("clean", "warn", "state.growth",
             f"State growing ~{growth:.1f} GB/day",
             "At this rate a small drive fills in weeks.",
-            "Constrain the indexer: `ssdwtf optimize ignore` in each project root."))
+            "Constrain the indexer: `ssdwtf optimize ignore` in each project root.",
+            evidence="derived"))
 
     # --- Monthly SMART habit ---
     try:
@@ -220,7 +224,8 @@ def analyze(report: HealthReport, history: list[HealthReport],
         findings.append(_f("monitor", "warn", "memory.thrash_hint",
             f"Swap growing ~{swap_rate:.1f} GB/day under elevated pressure",
             "Growing swap plus kernel pressure is the thrash pattern — the #1 SSD write driver.",
-            "Fully quit (Cmd+Q) agentic IDEs, or restart to drain swap."))
+            "Fully quit (Cmd+Q) agentic IDEs, or restart to drain swap.",
+            evidence="inferred"))
     sy = report.system
     cfg_up = config.get("uptime", {})
     if (sy.available and sy.uptime_days is not None and report.swap is not None
@@ -229,7 +234,8 @@ def analyze(report: HealthReport, history: list[HealthReport],
         findings.append(_f("monitor", "warn", "uptime.restart_hint",
             f"Uptime {sy.uptime_days:.0f} days with {report.swap.used_mb / 1024:.1f} GB swap",
             "A restart drains swap — the cheapest recovery there is.",
-            "Restart when convenient."))
+            "Restart when convenient.",
+            evidence="inferred"))
 
     # --- Throttle / battery / writerate ---
     cfg_th = config.get("thermal", {})

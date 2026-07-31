@@ -79,7 +79,11 @@ def _extract(report: HealthReport) -> dict[str, float]:
         put("writerate.mb_s", wr.mb_per_s)
     apfs = getattr(report, "apfs", None)
     if apfs is not None and getattr(apfs, "available", False):
-        put("apfs.local_snapshot_count", apfs.snapshot_count)
+        # error set → tmutil failed and snapshot_count is the unmeasured
+        # default; never record a zero for data we did not measure. The
+        # container-free source (diskutil) is independent and succeeded.
+        if apfs.error is None:
+            put("apfs.local_snapshot_count", apfs.snapshot_count)
         put("apfs.container_free_gb", apfs.container_free_gb)
     backup = getattr(report, "backup", None)
     if backup is not None and getattr(backup, "available", False):

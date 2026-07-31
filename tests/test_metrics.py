@@ -5,8 +5,8 @@ import unittest
 from pathlib import Path
 
 from ssdwtf import metrics
-from ssdwtf.models import (DiskReport, HealthReport, ProcessReport, SmartReport,
-                           StateDir, StateDirReport, SwapReport,
+from ssdwtf.models import (ApfsReport, DiskReport, HealthReport, ProcessReport,
+                           SmartReport, StateDir, StateDirReport, SwapReport,
                            make_empty_report)
 
 
@@ -58,6 +58,21 @@ class TestMetrics(unittest.TestCase):
             metrics.record(rep, path=db)  # everything unavailable/None
             self.assertEqual(metrics.series("smart.percent_used", 7, path=db), [])
             self.assertIsNone(metrics.latest("smart.percent_used", path=db))
+
+    def test_apfs_error_records_no_snapshot_count(self):
+        with tempfile.TemporaryDirectory() as td:
+            db = Path(td) / "m.db"
+            rep = _report("2026-07-30T10:00:00", 512.0)
+            rep.apfs = ApfsReport(available=True,
+                                  error="tmutil listlocalsnapshots failed",
+                                  container_free_gb=412.6)
+            metrics.record(rep, path=db)
+            # error set → snapshot_count is the unmeasured default; no fake 0.0
+            self.assertEqual(
+                metrics.series("apfs.local_snapshot_count", 7, path=db), [])
+            # container free came from diskutil, which succeeded
+            self.assertEqual(
+                metrics.latest("apfs.container_free_gb", path=db), 412.6)
 
     def test_record_never_raises_on_bad_path(self):
         rep = _report("2026-07-30T10:00:00", 512.0)

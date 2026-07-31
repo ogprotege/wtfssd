@@ -98,7 +98,8 @@ def render_text(report: HealthReport, findings: list[Finding]) -> str:
         lines.append("  none — machine looks healthy")
     order = {"critical": 0, "warn": 1, "info": 2}
     for f in sorted(findings, key=lambda f: order.get(f.severity, 3)):
-        lines.append(f"  [{f.severity.upper()}] {f.title}")
+        ev = f" (evidence: {f.evidence})" if f.evidence != "measured" else ""
+        lines.append(f"  [{f.severity.upper()}] {f.title}{ev}")
         lines.append(f"      {f.detail}")
         lines.append(f"      → {f.recommendation}")
     lines.append("")

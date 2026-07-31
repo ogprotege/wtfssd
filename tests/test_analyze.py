@@ -215,6 +215,26 @@ class TestPhase1Findings(unittest.TestCase):
         # drive collector unavailable in _base_report → unknown (no findings)
         self.assertEqual(dom["drive"], "unknown")
 
+    def test_hint_findings_carry_inferred_evidence(self):
+        rep = _base_report()
+        rep.swap = models.SwapReport(total_mb=16384.0, used_mb=9 * 1024,
+                                     free_mb=0.0)
+        rep.pressure = models.PressureReport(available=True, level=2,
+                                             free_pct=15.0)
+        rep.system = models.SystemReport(available=True, uptime_days=20.0)
+        history = []
+        for i, ts in enumerate(["2026-07-28T10:00:00", "2026-07-29T10:00:00",
+                                "2026-07-30T10:00:00"]):
+            h = _base_report()
+            h.timestamp = ts
+            h.swap = models.SwapReport(total_mb=16384.0,
+                                       used_mb=(6 + i) * 1024, free_mb=0.0)
+            history.append(h)
+        findings = analyze.analyze(rep, history, dict(DEFAULTS))
+        ev = {f.code: f.evidence for f in findings}
+        self.assertEqual(ev["memory.thrash_hint"], "inferred")
+        self.assertEqual(ev["uptime.restart_hint"], "inferred")
+
 
 if __name__ == "__main__":
     unittest.main()

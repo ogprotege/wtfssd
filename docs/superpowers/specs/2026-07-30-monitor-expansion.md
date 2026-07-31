@@ -113,7 +113,7 @@ above the findings; `--json` gains a `domains` object.
 
 Phase 1 domains: `drive` (smart + external), `backup`, `headroom`,
 `memory` (swap + pressure), `processes`, `state`, `stability` (crashes +
-throttle), `telemetry` (writerate, battery, uptime). Status per domain:
+throttle + uptime), `telemetry` (writerate, battery). Status per domain:
 `ok | warn | critical | unknown`, = worst finding severity mapped into that
 domain; `unknown` when its collectors were unavailable. A critical in any
 domain makes overall exit code 2 as today.
@@ -154,7 +154,7 @@ Warning`, `Available Spare Threshold`, `Unsafe Shutdowns`, and composite
 | `memory.thrash_hint` | inferred warn | swap.used_gb rising (rate > 0.5 GB/day) AND pressure ≥ 2 in same window |
 | `crashes.frequent` | warn | any watched app > `crashes.warn_weekly` (3) in 7 days |
 | `thermal.throttling` | warn | cpu_speed_limit < 100 |
-| `battery.wear` | info | max_capacity < 90% or cycle delta > `battery.cycle_info_month` — informational only |
+| `battery.wear` | info | max_capacity < `battery.capacity_info_pct` (90%) — informational only (cycle-delta tracking deferred to Phase 3 baselines) |
 | `uptime.restart_hint` | inferred warn | uptime > `uptime.warn_days` (14) AND swap.used_gb ≥ swap.warn_gb |
 | `writerate.storm` | warn | mb_per_s > `writerate.warn_mb_s` (200) — sustained check arrives with baselines |
 | `smart.external_unhealthy` | critical | any configured external device: health ≠ PASSED, media errors, or critical warning |
