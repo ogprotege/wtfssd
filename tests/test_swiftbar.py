@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -49,6 +50,51 @@ class TestSwiftBar(unittest.TestCase):
                              timeout=30)
         self.assertEqual(out.returncode, 0)
         self.assertTrue(out.stdout.startswith("SSD:? | color=gray"))
+
+    def test_nondict_payload_degrades_to_gray(self):
+        env = dict(os.environ, SSDWTF_JSON="[1,2]")
+        out = subprocess.run([sys.executable, str(PLUGIN)],
+                             capture_output=True, text=True, env=env,
+                             timeout=30)
+        self.assertEqual(out.returncode, 0)
+        self.assertTrue(out.stdout.startswith("SSD:? | color=gray"))
+
+    def test_nondict_finding_entry_is_skipped(self):
+        payload = dict(PAYLOAD,
+                       findings=["oops", 42, *PAYLOAD["findings"]])
+        out = self._run(payload)
+        self.assertEqual(out.returncode, 0)
+        self.assertEqual(out.stderr, "")
+        self.assertTrue(out.stdout.startswith("SSD:C | color=red"))
+        self.assertIn("[CRITICAL] Last successful backup 9 days ago",
+                      out.stdout)
+
+    def test_scan_action_falls_back_without_ssdwtf_on_path(self):
+        with tempfile.TemporaryDirectory() as empty_path:
+            env = dict(os.environ, SSDWTF_JSON=json.dumps(PAYLOAD),
+                       PATH=empty_path)
+            out = subprocess.run([sys.executable, str(PLUGIN)],
+                                 capture_output=True, text=True, env=env,
+                                 timeout=30)
+        self.assertEqual(out.returncode, 0)
+        line = next(l for l in out.stdout.splitlines()
+                    if "Run full scan" in l)
+        self.assertNotIn("bash=ssdwtf ", line)
+        self.assertIn("terminal=true", line)
+
+    def test_scan_action_prefers_installed_ssdwtf(self):
+        with tempfile.TemporaryDirectory() as bin_dir:
+            fake = Path(bin_dir) / "ssdwtf"
+            fake.write_text("#!/bin/sh\nexit 0\n")
+            fake.chmod(0o755)
+            env = dict(os.environ, SSDWTF_JSON=json.dumps(PAYLOAD),
+                       PATH=bin_dir)
+            out = subprocess.run([sys.executable, str(PLUGIN)],
+                                 capture_output=True, text=True, env=env,
+                                 timeout=30)
+        self.assertIn(
+            "Run full scan | bash=ssdwtf param1=scan terminal=true",
+            out.stdout)
 
 
 if __name__ == "__main__":
