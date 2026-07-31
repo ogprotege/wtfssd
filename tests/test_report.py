@@ -84,5 +84,18 @@ class TestDomainTable(unittest.TestCase):
         self.assertIn("backup", joined)
 
 
+class TestDigest(unittest.TestCase):
+    def test_render_digest_shape(self):
+        rep = models.make_empty_report("2026-07-30T10:00:00", 64.0)
+        out = report.render_digest(rep, [], {
+            "days": 1, "scans": 5, "domains": {"drive": "ok"},
+            "swap_used_gb": 1.5, "state_total_gb": 43.2,
+            "backup_age_hours": 70.0})
+        self.assertIn("digest", out)
+        self.assertIn("1.5 GB", out)
+        self.assertIn("43.2 GB", out)
+        self.assertIn("health: 100/100", out)
+
+
 if __name__ == "__main__":
     unittest.main()

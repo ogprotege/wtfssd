@@ -139,3 +139,36 @@ def render_history(history: list[HealthReport]) -> str:
         lines.append(f"{r.timestamp:<20} {tb:>10} {wear:>7} "
                      f"{free:>9} {swap:>8} {state:>9}")
     return "\n".join(lines)
+
+
+def render_digest(report: HealthReport, findings: list[Finding],
+                  stats: dict) -> str:
+    """One-look daily summary: domains, key deltas, findings by severity."""
+    lines = [f"ssdwtf digest — {report.timestamp} "
+             f"(window: {stats.get('days', 1)} day(s))", ""]
+    lines.append(f"  scans recorded: {stats.get('scans', 0)}")
+    domains = stats.get("domains", {})
+    if domains:
+        worst = max(domains.values(),
+                    key=lambda s: {"ok": 0, "unknown": 0, "warn": 1,
+                                   "critical": 2}.get(s, 0))
+        lines.append(f"  domains: worst = {worst}")
+    deltas = [
+        ("SSD writes", stats.get("tb_written_delta"), "{:+.2f} TB"),
+        ("write rate trend", stats.get("gb_written_per_day"), "{:.1f} GB/day"),
+        ("swap (latest)", stats.get("swap_used_gb"), "{:.1f} GB"),
+        ("state total (latest)", stats.get("state_total_gb"), "{:.1f} GB"),
+        ("logs growth", stats.get("logs_gb_per_day"), "{:+.2f} GB/day"),
+        ("backup age", stats.get("backup_age_hours"), "{:.0f} h"),
+    ]
+    for label, value, fmt in deltas:
+        if value is not None:
+            lines.append(f"  {label:<20} {fmt.format(value)}")
+    sev = {"critical": 0, "warn": 0, "info": 0}
+    for f in findings:
+        sev[f.severity] = sev.get(f.severity, 0) + 1
+    lines.append(f"  findings: {sev['critical']} critical · "
+                 f"{sev['warn']} warn · {sev['info']} info")
+    score = health_score(findings)
+    lines.append(f"  health: {score}/100 ({grade(score)})")
+    return "\n".join(lines)
