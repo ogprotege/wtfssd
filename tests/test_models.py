@@ -104,5 +104,48 @@ class TestPhase1Models(unittest.TestCase):
         self.assertEqual(back.external_smart, [])
 
 
+class TestPhase2Models(unittest.TestCase):
+    def test_new_reports_default_unavailable(self):
+        rep = models.make_empty_report("2026-07-30T10:00:00", 64.0)
+        for name in ("churn", "fds", "mcp", "secrets", "retention",
+                     "launchd", "spotlight", "logs", "gitwatch"):
+            self.assertFalse(getattr(rep, name).available, name)
+
+    def test_statedir_category_and_totals_default(self):
+        sd = models.StateDir(key="k", path="/x", exists=True, size_bytes=1)
+        self.assertEqual(sd.category, "")
+        self.assertEqual(models.StateDirReport().category_totals, {})
+
+    def test_process_report_ide_procs_default(self):
+        self.assertEqual(models.ProcessReport().ide_procs, [])
+
+    def test_roundtrip_nested_phase2(self):
+        rep = models.make_empty_report("2026-07-30T10:00:00", 64.0)
+        rep.mcp = models.MCPReport(
+            available=True, claude_running=True,
+            servers=[models.MCPServer(name="firecrawl", command="node fc.js",
+                                      live_pids=2, rss_mb=310.5)])
+        rep.gitwatch = models.GitWatchReport(
+            available=True,
+            repos=[models.RepoStatus(path="/repo", uncommitted=3,
+                                     has_remote=False, unpushed=7)])
+        rep.secrets = models.SecretsReport(
+            available=True, enabled=True,
+            matches=[models.SecretMatch(path="/f", line=9, rule="aws-access-key")])
+        back = models.report_from_dict(models.report_to_dict(rep))
+        self.assertEqual(back.mcp.servers[0].name, "firecrawl")
+        self.assertEqual(back.gitwatch.repos[0].unpushed, 7)
+        self.assertEqual(back.secrets.matches[0].rule, "aws-access-key")
+
+    def test_from_dict_tolerates_phase1_rows(self):
+        rep = models.make_empty_report("2026-07-30T10:00:00", 64.0)
+        d = models.report_to_dict(rep)
+        for k in ("churn", "fds", "mcp", "secrets", "retention",
+                  "launchd", "spotlight", "logs", "gitwatch"):
+            d.pop(k, None)
+        back = models.report_from_dict(d)
+        self.assertFalse(back.mcp.available)
+
+
 if __name__ == "__main__":
     unittest.main()
