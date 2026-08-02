@@ -34,7 +34,7 @@ When every stage below is complete, all of the following must be true:
 - [ ] `wtfssd scan` (full) still runs forensic collectors; AI-core statedirs every full scan; **bulk** statedirs only when `--bulk-state` or daily policy.
 - [ ] Menubar default refresh is **≥ 5 min** and uses **micro** (or status-file) path — not full `--fast` with iostat.
 - [ ] `optimize install-agent` installs **at most one** continuous agent by default (hourly full **or** menubar-owned; no dual 5‑min + hourly stack as default).
-- [ ] `state.growth` does not fire until **≥ 3 calendar days** of comparable full statedirs samples exist and rate is within a sanity cap.
+- [x] `state.growth` does not fire until **≥ 3 calendar days** of comparable full statedirs samples exist and rate is within a sanity cap. — verified live 2026-08-02
 - [ ] Full suite green: `python3 -m unittest discover -s tests -v`
 - [ ] README + AGENTS.md describe micro/fast/full and the “one scheduler” rule.
 - [ ] Live self-check: with menubar running at defaults, Activity Monitor does not show a Python process every 60s for ~1+ second.
@@ -67,8 +67,8 @@ When every stage below is complete, all of the following must be true:
 | **0** | Machine relief (ops only) | Stop the bleeding on *this* Mac before code | **Yes — first session** | **DONE 2026-08-02** |
 | **A** | Spec stub + branch | Lock decisions before code thrash | Yes (short) | **DONE 2026-08-02** |
 | **1** | True tier allow-lists | Unblocks every later continuous path | Code session 1 | **DONE 2026-08-02** |
-| **2** | Growth trust gates | Stops false panic findings | Code session 2 |
-| **3** | State registry split | Removes expensive walks from default full | Code session 3 |
+| **2** | Growth trust gates | Stops false panic findings | Code session 2 | **DONE 2026-08-02** |
+| **3** | State registry split | Removes expensive walks from default full | Code session 3 | pending |
 | **4** | Single-scheduler agents | Stops dual LaunchAgent stack | Code session 4 |
 | **5** | Menubar micro path | Makes UI ethical by default | Code session 5 |
 | **6** | Docs + verification | Ship confidence | Final session |
@@ -583,6 +583,11 @@ writerate/statedirs: `available=False` / note `not collected (tier=micro|fast)` 
 
 # STAGE 2 — Growth trust gates
 
+> **STATUS: COMPLETED 2026-08-02** (subagent-driven)  
+> Commit: `3dd4325` history: gate state.growth on samples, span, and sanity cap  
+> Live: **no `state.growth` finding** on current history (was ~29 GB/day false positive)  
+> Suite: **217 OK**
+
 **Goal:** Stop absurd `state.growth ~29 GB/day` false positives until enough comparable samples exist.
 
 ### Task 2.1: Gate `state_growth_gb_per_day`
@@ -1080,9 +1085,8 @@ This stage is a separate mini-plan if needed — do not expand scope mid-flight.
 |---|---|---|---|
 | **1** | Stage 0 all tasks | ~20 min | **DONE 2026-08-02** |
 | **1b** | Stage A + Stage 1 (Tasks 1.1–1.2) subagent-driven | ~15 min wall | **DONE 2026-08-02** |
-| **2** | Stage 2 growth gates | 45–90 min | next |
-| **3** | Stage 2 | 45–90 min |
-| **4** | Stage 3 | 1–2 h |
+| **2** | Stage 2 growth gates | ~subagent session | **DONE 2026-08-02** |
+| **3** | Stage 3 state split | 1–2 h | next |
 | **5** | Stage 4 | 45–90 min |
 | **6** | Stage 5 rebuild menubar | 1–2 h |
 | **7** | Stage 6 docs + suite + PR | 1 h |
