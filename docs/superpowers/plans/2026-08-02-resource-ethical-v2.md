@@ -36,8 +36,8 @@ When every stage below is complete, all of the following must be true:
 - [x] `optimize install-agent` installs **at most one** continuous agent by default (hourly full; no dual stack as default). — verified 2026-08-02
 - [x] `state.growth` does not fire until **≥ 3 calendar days** of comparable full statedirs samples exist and rate is within a sanity cap. — verified live 2026-08-02
 - [x] Product is **CLI-only**; README / COMMANDS / AGENTS / spec say so. — 2026-08-02
-- [ ] Full suite green: `python3 -m unittest discover -s tests -v` (Stage 6)
-- [ ] README + COMMANDS stay consistent through final PR (Stage 6)
+- [x] Full suite green: `python3 -m unittest discover -s tests -v` — **225 OK** (2026-08-02)
+- [x] README + COMMANDS + AGENTS stay consistent through Stage 6 / PR
 
 ---
 
@@ -69,7 +69,7 @@ When every stage below is complete, all of the following must be true:
 | **3** | State registry split | Removes expensive walks from default full | Code session 3 | **DONE 2026-08-02** |
 | **4** | Single-scheduler agents | Stops dual LaunchAgent stack | Code session 4 | **DONE 2026-08-02** |
 | **5** | CLI-only product cut | Drop menubar from supported surface | Docs + plan | **DONE 2026-08-02** |
-| **6** | Docs + verification | Ship confidence | Final session |
+| **6** | Docs + verification | Ship confidence | Final session | **DONE 2026-08-02** |
 | **7** | ~~Status-file daemon~~ | Was menubar support; **cancelled** (CLI-only) | — | **CANCELLED** |
 
 **Dependency graph:**
@@ -1061,11 +1061,14 @@ If this app is open, run: wtfssd optimize uninstall-agent
 
 # STAGE 6 — Docs, suite, live verification
 
+> **STATUS: COMPLETED 2026-08-02**  
+> Suite: **225 OK** · Timings recorded · Spec pointers · PR from `resource-ethical-v2`
+
 ### Task 6.1: README + AGENTS.md + COMMANDS.md
 
 **Files:** already largely done through Stage 5 CLI-only cut; Stage 6 is final consistency pass.
 
-- [ ] **Step 1: Confirm README / COMMANDS / AGENTS match CLI-only + tiers + single agent**
+- [x] **Step 1: Confirm README / COMMANDS / AGENTS match CLI-only + tiers + single agent**
 
 Expected references:
 
@@ -1079,56 +1082,39 @@ wtfssd optimize install-agent  # ONE hourly LaunchAgent by default
 
 No supported menu bar section in the happy path.
 
-- [ ] **Step 2: AGENTS.md** — update tier description; remove claim that fast includes writerate/backup if no longer true; document `watch.agent_mode`.
+- [x] **Step 2: AGENTS.md** — tiers allow-lists, agent_mode, growth keys, 225 tests, CLI-only
 
-- [ ] **Step 3: Patch monitor-expansion spec** with a one-line pointer at top:
+- [x] **Step 3: Patch monitor-expansion + base design specs** with resource-ethical v2 pointer
 
-```markdown
-> **Superseded in part by** `2026-08-02-resource-ethical-v2.md` for tier
-> membership and continuous sampling cadence.
-```
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add README.md AGENTS.md docs/superpowers/specs/*.md
-git commit -m "docs: resource-ethical v2 tiers, agents, and menubar posture"
-```
+- [x] **Step 4: Commit** — Stage 6 docs + plan completion
 
 ### Task 6.2: Full test suite + timing report
 
-- [ ] **Step 1: Full suite**
+- [x] **Step 1: Full suite** — **225 OK** (2026-08-02)
 
-```bash
-cd /Users/biscuit/wtfssd
-python3 -m unittest discover -s tests -v
-```
+- [x] **Step 2: Timing table** (see completion log / WIP)
 
-Expected: all OK. Fix any breakages from tier signature changes (especially `test_cli` patches).
+| Command | real s (2026-08-02) |
+|---------|---------------------|
+| scan --micro --no-history | 0.12 |
+| scan --fast --no-history | 0.99 |
+| scan --no-history | 5.03 |
+| scan --bulk-state --no-history | 3.51 |
 
-- [ ] **Step 2: Write timing table into `WIP.md`**
+- [x] **Step 3: Outcome checklist** — all product boxes checked
 
-```markdown
-## Resource-ethical v2 timings (YYYY-MM-DD)
-| Command | real s |
-|---------|--------|
-| scan --micro --no-history | |
-| scan --fast --no-history | |
-| scan --no-history | |
-| scan --bulk-state --no-history | |
-```
+- [x] **Step 4: Final commit / PR** — branch `resource-ethical-v2` → `main`
 
-- [ ] **Step 3: Outcome checklist** at top of this plan — check every box that is true.
+**Stage 6 done when:** suite green, docs match behavior, outcome checklist complete. **MET.**
 
-- [ ] **Step 4: Final commit / PR**
+### Stage 6 completion log
 
-```bash
-git status
-git log --oneline main..HEAD  # or rename-wtfssd..HEAD
-# open PR when ready: resource-ethical v2
-```
-
-**Stage 6 done when:** suite green, docs match behavior, outcome checklist complete.
+| Field | Value |
+|-------|--------|
+| Completed | 2026-08-02 |
+| Suite | 225 OK |
+| Product | CLI-only, resource-ethical tiers + single agent |
+| Next | Open PR; Stage 7 cancelled |
 
 ---
 

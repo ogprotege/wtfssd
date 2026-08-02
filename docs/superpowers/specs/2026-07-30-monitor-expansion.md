@@ -1,8 +1,14 @@
 # wtfssd — Monitor Expansion Design Spec
 
+> **Superseded in part by** `2026-08-02-resource-ethical-v2.md` for tier
+> membership (allow-lists), continuous sampling cadence, single LaunchAgent
+> default, CLI-only product posture, and growth gates. Where that document
+> disagrees with this one, **resource-ethical v2 wins**.
+
 Companion to `2026-07-30-wtfssd-design.md` (the base spec). Everything in the
 base spec still holds; this document extends it. Where the two disagree, this
-document wins and the base spec should be patched in the same change.
+document wins and the base spec should be patched in the same change
+(except where resource-ethical v2 supersedes, as noted above).
 
 Source requirements: `My-tool-mon_ideas.txt` (30 specced monitors + monitoring
 inventory) diffed against the shipped v0.1.0. The package name stays

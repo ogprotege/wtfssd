@@ -12,7 +12,7 @@ tests green, live-verified on macOS). The full package source under
 `wtfssd/` is present and authoritative, alongside:
 
 - `pyproject.toml`, `README.md`, `LICENSE` — packaging, docs
-- `tests/` — the complete test suite (33 files, 211 tests)
+- `tests/` — the complete test suite (225 tests as of resource-ethical v2)
   plus captured command-output fixtures in `tests/fixtures/`
 - `docs/superpowers/specs/2026-07-30-wtfssd-design.md` — the design spec
 - `docs/superpowers/plans/2026-07-30-wtfssd.md` — the implementation plan
@@ -187,8 +187,9 @@ These are contractual, from the implementation plan's global constraints:
 - Filesystem-touching tests (cleaners, optimize, history, config) run against
   `tempfile.TemporaryDirectory` and fakes; `cli` tests use `unittest.mock` to
   patch `build_report`, `analyze`, history, and config paths.
-- The suite is **211 tests, all passing** (verified after the Phase 3
-  monitor expansion: alerts, digest, fast-tier agent, SwiftBar plugin).
+- The suite is **225 tests, all passing** (resource-ethical v2: allow-list
+  tiers, growth gates, AI/bulk statedirs, single LaunchAgent, CLI-only).
+  Operator docs: `README.md` + `COMMANDS.md`.
 
 ## Configuration and runtime state
 
@@ -196,14 +197,16 @@ These are contractual, from the implementation plan's global constraints:
   defaults; only set keys are overridden. Inspect with `wtfssd config --show`
   (path: `wtfssd config --path`). Useful keys: `swap.warn_gb`, `swap.crit_gb`,
   `disk.warn_free_pct`, `procs.ghost_days`, `state.vscdb_warn_gb`,
-  `smart.device`, `smart.external_devices`, `alerts.cooldown_hours`,
-  `alerts.cooldown_critical_hours`, `watch.interval_minutes`,
-  `watch.fast_interval_minutes`, `projects` (dirs scanned for stale
-  `node_modules`), `tiers.fast`/`tiers.slow` (collector split behind
-  `scan --fast`; fast adds `backup`/`retention`/`launchd`/`spotlight`/`mcp`,
-  slow carries `statedirs`/`apfs`/`crashes`/`churn`/`fds`/`secrets`/
-  `logs`/`gitwatch`), `backup.enabled`/`backup.warn_hours`/`backup.crit_hours`,
-  `apfs.snapshot_warn_days`, `pressure.sustained_min`,
+  `state.growth_min_samples`/`state.growth_min_days`/`state.growth_max_gb_day`,
+  `state.include_bulk_default`, `smart.device`, `smart.external_devices`,
+  `alerts.cooldown_hours`, `alerts.cooldown_critical_hours`,
+  `watch.interval_minutes`, `watch.fast_interval_minutes`,
+  `watch.agent_mode` (`hourly` default | `fast` | `both` | `none`),
+  `projects` (dirs scanned for stale `node_modules`),
+  `tiers.micro`/`tiers.fast`/`tiers.full` (collector **allow-lists** for
+  `--micro` / `--fast` / full; writerate only on full; statedirs AI-core on
+  full, bulk via `--bulk-state`), `backup.enabled`/`backup.warn_hours`/
+  `backup.crit_hours`, `apfs.snapshot_warn_days`, `pressure.sustained_min`,
   `crashes.warn_weekly`/`crashes.apps`, `thermal.warn_below`,
   `uptime.warn_days`, `writerate.warn_mb_s`, `battery.capacity_info_pct`,
   `procs.leak_warn_mb_h`/`procs.leak_window_h`,
