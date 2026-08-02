@@ -1,263 +1,549 @@
-# wtfssd — Commands & workflows
+# wtfssd — Commands encyclopedia
 
-**Name:** `wtfssd` (legacy alias `ssdwtf` still works after `pipx install .`)  
-**Run without install:** `python3 -m wtfssd …` from the repo root  
-**Config:** `~/.config/wtfssd/config.json` · **Data:** `~/.local/share/wtfssd/`
+This is the **full operator manual**: workflows, every command, clean targets,
+tiers, agents, config, and troubleshooting for the command line itself.
 
-This is the **operator guide**. For design history, see `docs/superpowers/specs/`.  
-For coding agents, see `AGENTS.md`.
-
----
-
-## What this tool is for
-
-Your Mac feels slow/hot/full after heavy agentic coding. The SSD is usually
-**healthy**; the mess is **swap, long-lived IDE helpers, and unbounded local
-state**. `wtfssd` measures that, alerts you, and cleans regenerable junk
-**safely** (dry-run by default, Trash, app guards).
-
-**CLI only** — no supported menu bar app. Optional background: **one** hourly
-LaunchAgent that runs `watch --once` and can notify via Notification Center.
+**New here?** Start with the narrative guide: **[README.md](README.md)**  
+(why it exists, first 10 minutes, how to read a report).
 
 ---
 
-## Do this first (5 minutes)
+## Identity
+
+| Item | Value |
+|------|--------|
+| Canonical command | `wtfssd` |
+| Legacy alias | `ssdwtf` (same program after `pipx install .`) |
+| From source | `python3 -m wtfssd …` (run inside the repo) |
+| Config | `~/.config/wtfssd/config.json` |
+| Runtime data | `~/.local/share/wtfssd/` |
+| Product shape | **CLI only** — no supported GUI |
+
+---
+
+## Exit codes
+
+Used by `scan`, `watch --once`, and `digest`:
+
+| Code | Meaning | Shell tip |
+|------|---------|-----------|
+| **0** | No warn/critical findings | “looks clean enough” |
+| **1** | At least one **warn**, no critical | worth reading findings |
+| **2** | At least one **critical** | act soon |
+| **3** | Bad usage or internal error | fix command / report bug |
+
+`clean` exits **0** on success, **3** if you name an unknown target.
+
+---
+
+# Part 1 — Workflows (do these)
+
+## Workflow 1 — First-time health check
 
 ```sh
-# 1. See what's wrong
 wtfssd scan
+```
 
-# 2. See what you can reclaim (deletes nothing)
+Then read the **FINDINGS** section and the health grade at the bottom.  
+Nothing is deleted.
+
+Optional cheaper passes:
+
+```sh
+wtfssd scan --micro      # seconds-cheap vitals only
+wtfssd scan --fast       # medium (SMART + system, no big folder walks)
+```
+
+## Workflow 2 — Free space carefully
+
+```sh
+# 1) See reclaimable junk (dry-run)
 wtfssd clean
 
-# 3. Optional: actually clean a safe target
+# 2) Clean one safe target for real (→ Trash)
+#    Quit Cursor/Claude first if cleaning their stuff
 wtfssd clean cursor-caches --apply
 
-# 4. Optional: cut indexer churn in a project
-wtfssd optimize ignore ~/path/to/project
-
-# 5. Optional: hourly check + macOS notifications
-wtfssd optimize install-agent
+# 3) If free space barely moved:
+wtfssd optimize headroom
+wtfssd scan --bulk-state          # include Xcode/Docker/Caches sizes
+# Empty Trash in Finder
 ```
 
-Exit codes for `scan` / `watch --once` / `digest`:
+## Workflow 3 — Machine feels slow / hot, nothing “open”
 
-| Code | Meaning |
-|------|---------|
-| 0 | OK (no warn/critical findings) |
-| 1 | Warnings only |
-| 2 | At least one critical finding |
-| 3 | Usage or internal error |
+```sh
+wtfssd scan --micro               # swap + pressure + process count fast
+wtfssd scan                       # full picture
+```
+
+Typical fixes the findings will suggest:
+
+- **Cmd+Q** IDEs (not only red-button close)  
+- Reboot if swap has been high for days  
+- Fewer parallel agents / projects  
+
+## Workflow 4 — Keep indexers out of junk
+
+```sh
+wtfssd optimize ignore ~/code/my-app
+wtfssd optimize ignore ~/code/other-app
+```
+
+Opens/creates `.cursorignore` and merges rules under a `# wtfssd` marker.
+Safe to re-run (won’t duplicate lines).
+
+## Workflow 5 — Background babysitter (optional)
+
+```sh
+wtfssd optimize install-agent       # ONE hourly full check + notify
+# …
+wtfssd optimize uninstall-agent     # turn off completely
+```
+
+Logs (if agent runs): `~/.local/share/wtfssd/watch.log`
+
+## Workflow 6 — “What changed this week?”
+
+```sh
+wtfssd history --last 20
+wtfssd digest --days 7
+wtfssd digest --days 7 --json
+```
+
+## Workflow 7 — Scripting / automation
+
+```sh
+wtfssd scan --json --no-history
+echo $?    # 0 / 1 / 2 / 3
+```
+
+Use `--no-history` in tight loops so you don’t grow `history.jsonl` forever.
 
 ---
 
-## Workflows
+# Part 2 — Scan gears (tiers)
 
-### A. “Is my drive dying or is software drowning me?”
+Collectors are **allow-lists** in config (`tiers.micro`, `tiers.fast`, `tiers.full`).
 
-```sh
-wtfssd scan                 # full forensic (recommended)
-wtfssd scan --json          # for scripting
-wtfssd history              # wear / free space / swap over time
-```
+| Flag | Name | What’s included (defaults) | What’s skipped | Typical use |
+|------|------|----------------------------|----------------|-------------|
+| `--micro` | Micro | swap, free disk, memory pressure, IDE process counts | SMART, iostat, folder walks, almost everything else | “Is it thrashing *right now*?” |
+| `--fast` | Fast | micro + SMART, system (uptime/throttle/battery), backup, retention, launchd, Spotlight, MCP | statedirs walks, writerate (1-second iostat), APFS deep, crashes, logs, … | Quick morning check |
+| *(none)* | Full | fast + **AI-core state dirs**, APFS snapshots, crashes, churn, FDs, secrets (if on), logs, gitwatch, **writerate** | bulk trees (Xcode/Docker/Caches/models) | Real diagnose |
+| `--bulk-state` | Full+bulk | full + bulk state dirs | — | “What’s eating the disk?” |
 
-Read: SMART % used and health, free %, swap, IDE process count, AI state totals,
-backup status, findings at the bottom.
+**AI-core state dirs (full default):** Cursor, Claude, VS Code, Windsurf, Zed,
+Codex paths (and chat DB sizes).
 
-### B. “Free space without doing something stupid”
+**Bulk dirs (`--bulk-state` only):** JetBrains, Ollama, LM Studio, Hugging Face,
+MLX, Docker Desktop data, Xcode DerivedData, large `~/Library/Caches`.
 
-```sh
-wtfssd clean                              # dry-run all safe targets
-wtfssd clean cursor-caches --apply        # real clean → Trash
-wtfssd clean cursor-vscdb-backups --apply # chat DB backups only
-# High risk (loses local chat history) — quit Cursor first:
-wtfssd clean cursor-vscdb --apply
-```
+**Special case:** `wtfssd optimize headroom` always sizes with bulk so the
+“biggest consumers” list is honest.
 
-Rules (always):
+If you pass **both** `--micro` and `--fast`, **micro wins** (stderr warning).
 
-- No `--apply` → **nothing is removed**
-- Default remove path is **Trash**, not `rm`
-- Owning app running → skip unless `--force`
-- Chat DB → copied under `~/.local/share/wtfssd/backups/` first
+### Timing reality check
 
-### C. “Stop the machine filling up again”
+On a healthy machine you should see roughly:
 
-```sh
-wtfssd optimize ignore ~/my-project       # .cursorignore junk paths
-wtfssd optimize headroom                  # free % + biggest consumers
-```
-
-### D. “Ping me if things get bad” (optional background)
+| Command | Ballpark |
+|---------|----------|
+| `scan --micro --no-history` | ~0.1 s |
+| `scan --fast --no-history` | under ~1 s |
+| `scan --no-history` | a few seconds |
+| `scan --bulk-state` | longer if caches are huge |
 
 ```sh
-wtfssd optimize install-agent             # one hourly full watch --once
-wtfssd optimize uninstall-agent           # remove agents
+/usr/bin/time -p wtfssd scan --micro --no-history >/dev/null
 ```
-
-Prefer **on-demand `scan`** if you don’t want anything scheduled.  
-Avoid `--mode both` (two pollers).
-
-### E. “Quick check” vs “deep dive”
-
-| Goal | Command |
-|------|---------|
-| Seconds-cheap vitals | `wtfssd scan --micro` |
-| Medium (SMART, backup, no big walks) | `wtfssd scan --fast` |
-| Full diagnose | `wtfssd scan` |
-| Full + Xcode/Docker/Caches/models | `wtfssd scan --bulk-state` |
-| One-look summary | `wtfssd digest` · `wtfssd digest --days 7` |
-
-**Tiers (plain language):**
-
-| Flag | Includes (roughly) | Avoids |
-|------|--------------------|--------|
-| `--micro` | swap, free disk, memory pressure, IDE process count | SMART, iostat, directory walks |
-| `--fast` | micro + SMART, uptime/throttle/battery, backup, retention, launchd, Spotlight, MCP | statedirs walks, writerate (1s iostat) |
-| *(default full)* | fast + AI tool state sizes, APFS, crashes, churn, FDs, logs, git repos, **writerate** | bulk trees unless `--bulk-state` |
-| `--bulk-state` | full + Xcode / Docker / HF / general Caches / models | — (slowest) |
-
-If you pass both `--micro` and `--fast`, **micro wins**.
 
 ---
 
-## Command reference
+# Part 3 — Command reference
 
-### `scan` — diagnose
+## `scan` — diagnose
+
+```text
+wtfssd scan [--json] [--no-history] [--micro] [--fast] [--bulk-state]
+```
+
+| Flag | Meaning |
+|------|---------|
+| *(default)* | Full forensic tier |
+| `--json` | Machine-readable JSON (score, domains, findings, raw report) |
+| `--no-history` | Do not append `history.jsonl` or `metrics.db` |
+| `--micro` | Micro tier |
+| `--fast` | Fast tier |
+| `--bulk-state` | Full + bulk directory sizing |
+
+Examples:
 
 ```sh
 wtfssd scan
-wtfssd scan --json
-wtfssd scan --no-history          # don't write history/metrics
-wtfssd scan --micro | --fast
+wtfssd scan --json | python3 -m json.tool | less
+wtfssd scan --micro --no-history
 wtfssd scan --bulk-state
 ```
 
-### `watch` — scan + notifications
+---
 
-```sh
-wtfssd watch --once               # one pass (LaunchAgent / cron)
-wtfssd watch --once --fast
-wtfssd watch                      # loop until Ctrl-C
-wtfssd watch --interval 30        # minutes between loops
+## `watch` — diagnose + notify
+
+```text
+wtfssd watch [--once] [--interval MIN] [--micro] [--fast] [--bulk-state]
 ```
 
-Alerts: new finding, severity escalation, or cooldown elapsed  
-(warn default 24h, critical 4h). Info findings never notify.
-
-### `clean` — reclaim space
+| Flag | Meaning |
+|------|---------|
+| `--once` | One pass, then exit (use this from LaunchAgent) |
+| `--interval N` | Loop every N minutes (default from config) |
+| tier flags | Same meaning as `scan` |
 
 ```sh
+wtfssd watch --once
+wtfssd watch --once --fast
+wtfssd watch --interval 60
+```
+
+### When do notifications fire?
+
+Only for **warn** and **critical** findings, when:
+
+1. The finding **code** is new, or  
+2. Severity **went up** (warn → critical), or  
+3. The per-severity **cooldown** elapsed (default warn 24h, critical 4h)
+
+**Info** findings never notify.
+
+---
+
+## `clean` — reclaim space
+
+```text
 wtfssd clean [target …] [--apply] [--hard] [--force] [--json]
 ```
 
-| Target id | What it is |
-|-----------|------------|
-| `cursor-caches` | Cursor caches / logs |
-| `cursor-vscdb-backups` | Chat DB backup files only |
-| `cursor-vscdb` | Live chat DB (history lost) |
-| `cursor-snapshots` | Indexer `*.pack` files |
-| `claude-caches` | Claude app caches |
-| `xcode-deriveddata` | Xcode DerivedData |
-| `xcode-devicesupport` | iOS DeviceSupport |
-| `user-caches` | Large dirs under `~/Library/Caches` |
-| `node-modules-stale` | Old `node_modules` under configured `projects` |
-| `trash` | Empty `~/.Trash` (irreversible when applied) |
+| Flag | Meaning |
+|------|---------|
+| *(no --apply)* | **Dry-run only** — print what would happen |
+| `--apply` | Perform clean (default: move to `~/.Trash`) |
+| `--hard` | Permanent delete (only with `--apply`) |
+| `--force` | Ignore “owning app is running” skip |
+| `--json` | JSON result objects |
 
-Default with no targets: all targets marked **safe**.
+### Target ids
 
-### `optimize` — prevent recurrence
+| id | Risk | What it cleans | Notes |
+|----|------|----------------|-------|
+| `cursor-caches` | safe | Cursor Cache, logs, etc. | Quit Cursor first |
+| `cursor-vscdb-backups` | moderate | `state.vscdb.backup*` only | Not the live DB |
+| `cursor-vscdb` | **high** | Live `state.vscdb` | **Local chat history gone**; tool backups first; quit Cursor |
+| `cursor-snapshots` | moderate | `*.pack` indexer snapshots | Can regenerate |
+| `claude-caches` | safe | Claude app caches | Quit Claude first |
+| `xcode-deriveddata` | safe | Xcode DerivedData | Rebuild cost = time |
+| `xcode-devicesupport` | safe | iOS DeviceSupport | Re-downloads as needed |
+| `user-caches` | safe | Largest dirs under `~/Library/Caches` | Config: min size / top N |
+| `node-modules-stale` | safe | Old `node_modules` under `projects` | Needs `projects` in config |
+| `trash` | special | Empties `~/.Trash` | Irreversible when applied |
+
+No targets listed → all targets with risk **`safe`**.
+
+Examples:
 
 ```sh
+wtfssd clean
+wtfssd clean cursor-caches
+wtfssd clean cursor-caches xcode-deriveddata --apply
+wtfssd clean cursor-vscdb --apply          # high risk — read the warnings
+wtfssd clean trash --apply                 # empty Trash
+```
+
+### Safety enforcement (hard-coded)
+
+- Paths outside your home → refused  
+- Home directory itself → refused  
+- `Documents` / `Desktop` / `Movies` / `Music` / `Pictures` → refused  
+- App guard when `guard_app` is running → skip unless `--force`  
+
+---
+
+## `optimize` — prevent recurrence
+
+### `optimize ignore`
+
+```text
 wtfssd optimize ignore [dir …]
+```
+
+Default dir: current working directory.
+
+```sh
+wtfssd optimize ignore
+wtfssd optimize ignore ~/code/app1 ~/code/app2
+```
+
+### `optimize headroom`
+
+```text
 wtfssd optimize headroom
+```
+
+Prints free % and the free-space floor (15–25%). If below 15%, lists largest
+monitored consumers (with **bulk** sizing so Xcode/caches appear).
+
+### `optimize install-agent`
+
+```text
 wtfssd optimize install-agent [--mode hourly|fast|both|none]
+```
+
+| Mode | What gets installed |
+|------|---------------------|
+| `hourly` (**default**) | `com.wtfssd.watch` → full `watch --once` on `watch.interval_minutes` (60) |
+| `fast` | `com.wtfssd.watch.fast` → cheap pass on `watch.fast_interval_minutes` |
+| `both` | Both agents + **warning** (usually a bad idea) |
+| `none` | Installs nothing |
+
+Config default: `"watch": { "agent_mode": "hourly" }`.  
+CLI `--mode` overrides config for that invocation only.
+
+```sh
+wtfssd optimize install-agent
+wtfssd optimize install-agent --mode none
+wtfssd optimize install-agent --mode both    # discouraged
+```
+
+### `optimize uninstall-agent`
+
+```text
 wtfssd optimize uninstall-agent
 ```
 
-| `--mode` | Installs |
-|----------|----------|
-| `hourly` (default) | `com.wtfssd.watch` → `watch --once` hourly |
-| `fast` | `com.wtfssd.watch.fast` → cheap pass on a shorter interval |
-| `both` | Both (warning printed — usually a bad idea) |
-| `none` | Nothing |
+Removes **both** labels if present (`com.wtfssd.watch` and
+`com.wtfssd.watch.fast`).
 
-### `history` · `digest` · `config`
+Manual recovery:
 
 ```sh
-wtfssd history [--last N] [--json]
-wtfssd digest [--days N] [--json] [--micro|--fast]
-wtfssd config --show              # full merged JSON
-wtfssd config --path              # config file location
+launchctl list | grep wtfssd
+launchctl bootout "gui/$(id -u)/com.wtfssd.watch" 2>/dev/null
+launchctl bootout "gui/$(id -u)/com.wtfssd.watch.fast" 2>/dev/null
+rm -f ~/Library/LaunchAgents/com.wtfssd.watch*.plist
 ```
 
 ---
 
-## Config people actually change
+## `history` — trends
 
-File: `~/.config/wtfssd/config.json` (deep-merged over defaults).
+```text
+wtfssd history [--last N] [--json]
+```
+
+```sh
+wtfssd history
+wtfssd history --last 30
+wtfssd history --json
+```
+
+Built from `~/.local/share/wtfssd/history.jsonl` (rows from past `scan` /
+`watch` that did not use `--no-history`).
+
+---
+
+## `digest` — one-look summary
+
+```text
+wtfssd digest [--days N] [--json] [--micro] [--fast]
+```
+
+```sh
+wtfssd digest
+wtfssd digest --days 7
+wtfssd digest --json --days 3
+```
+
+Runs a scan (default full), then summarizes domain statuses and key deltas
+(TB written, state size, backup age, …).
+
+---
+
+## `config` — settings
+
+```text
+wtfssd config --show
+wtfssd config --path
+```
+
+`--show` is the usual action: full **merged** JSON (defaults + your file).
+
+---
+
+# Part 4 — Configuration people actually change
+
+File: `~/.config/wtfssd/config.json`  
+Missing file → all defaults. Invalid JSON → defaults + warning (tool still runs).
+
+### Minimal useful config
 
 ```json
 {
   "swap": { "warn_gb": 4.0, "crit_gb": 12.0 },
   "disk": { "warn_free_pct": 15.0, "crit_free_pct": 10.0 },
-  "projects": ["/Users/you/code"],
-  "watch": { "interval_minutes": 60, "agent_mode": "hourly" },
-  "secrets": { "enabled": false },
-  "git": { "repos": ["/Users/you/code/my-app"] }
+  "projects": ["/Users/YOU/code"],
+  "watch": {
+    "interval_minutes": 60,
+    "agent_mode": "hourly"
+  },
+  "git": {
+    "repos": ["/Users/YOU/code/my-app"]
+  },
+  "secrets": { "enabled": false }
 }
 ```
 
-| Key | Purpose |
-|-----|---------|
-| `swap.warn_gb` / `crit_gb` | Swap pressure thresholds |
-| `disk.warn_free_pct` / `crit_free_pct` | Free-space floor |
-| `projects` | Roots scanned for stale `node_modules` |
-| `watch.agent_mode` | `hourly` · `fast` · `both` · `none` |
-| `watch.interval_minutes` | Full agent cadence |
-| `secrets.enabled` | Opt-in path/line/rule scan (never prints secrets) |
-| `git.repos` | Repos for uncommitted/unpushed warnings |
-| `smart.external_devices` | e.g. `["/dev/disk2"]` |
-| `backup.enabled` | Time Machine domain on/off |
+### Key reference (operator-relevant)
 
-Everything else: `wtfssd config --show`.
+| Key | Default idea | Purpose |
+|-----|--------------|---------|
+| `swap.warn_gb` / `crit_gb` | 8 / 16 | Swap used thresholds |
+| `disk.warn_free_pct` / `crit_free_pct` | 15 / 10 | Free-space floor |
+| `disk.mount` | Data volume path | Which volume `df` checks |
+| `procs.ghost_days` | 3 | Age before “ghost” helper |
+| `procs.warn_count` | 20 | Too many IDE-related processes |
+| `state.vscdb_warn_gb` | 2 | Cursor chat DB size warn |
+| `state.total_warn_gb` | 20 | Total AI/tool state warn |
+| `state.growth_*` | samples/days/cap | Stops false “GB/day” panic |
+| `state.include_bulk_default` | false | Always bulk-size on full if true |
+| `watch.interval_minutes` | 60 | Hourly agent period |
+| `watch.fast_interval_minutes` | 15 | Fast agent period (if used) |
+| `watch.agent_mode` | `hourly` | What `install-agent` installs |
+| `alerts.cooldown_hours` | 24 | Warn re-notify spacing |
+| `alerts.cooldown_critical_hours` | 4 | Critical re-notify spacing |
+| `projects` | `[]` | Roots for stale `node_modules` clean |
+| `git.repos` | `[]` | Repos for dirty/unpushed warns |
+| `smart.device` | `/dev/disk0` | Internal NVMe path |
+| `smart.external_devices` | `[]` | Extra disks for SMART |
+| `backup.enabled` | true | Time Machine domain on/off |
+| `secrets.enabled` | **false** | Opt-in secrets path scan |
+| `tiers.micro` / `fast` / `full` | lists | Collector allow-lists (advanced) |
+
+See everything: `wtfssd config --show`.
 
 ---
 
-## Paths
+# Part 5 — Paths & files
 
 | Path | Role |
 |------|------|
 | `~/.config/wtfssd/config.json` | Your overrides |
-| `~/.local/share/wtfssd/history.jsonl` | Past scans |
-| `~/.local/share/wtfssd/metrics.db` | Metric baselines |
+| `~/.local/share/wtfssd/history.jsonl` | Past scans (JSON lines) |
+| `~/.local/share/wtfssd/metrics.db` | SQLite baselines / rates |
 | `~/.local/share/wtfssd/alert_state.json` | Notification cooldowns |
+| `~/.local/share/wtfssd/churn_state.json` | Snapshot churn baseline |
+| `~/.local/share/wtfssd/launchd_baseline.json` | New LaunchAgent detection |
 | `~/.local/share/wtfssd/backups/` | Pre-clean copies of high-risk DBs |
-| `~/Library/LaunchAgents/com.wtfssd.watch*.plist` | Optional agents |
+| `~/.local/share/wtfssd/watch.log` | Hourly agent log |
+| `~/Library/LaunchAgents/com.wtfssd.watch.plist` | Optional agent |
 
 ---
 
-## Safety (short)
+# Part 6 — Troubleshooting the *commands*
 
-- **Dry-run by default** on `clean`
-- **Trash**, not silent `rm` (unless `--hard --apply`)
-- **App running** → skip unless `--force`
-- **Chat DB** → backup first
-- **Never touch** home root, Documents/Desktop/Pictures/… or paths outside `$HOME`
-- **scan / watch / history / config** are read-only (except writing history/metrics/alert state under `~/.local/share/wtfssd`)
+### `command not found: wtfssd`
+
+```sh
+cd /path/to/wtfssd && python3 -m wtfssd scan
+# or
+pipx install /path/to/wtfssd
+# open a new Terminal after pipx ensurepath
+```
+
+### Wrong Python version
+
+```sh
+python3 --version    # need 3.10+
+```
+
+### Help text
+
+```sh
+wtfssd --help
+wtfssd scan --help
+wtfssd clean --help
+wtfssd optimize install-agent --help
+```
+
+### Agent installed but never runs
+
+```sh
+launchctl list | grep wtfssd
+launchctl print "gui/$(id -u)/com.wtfssd.watch"
+cat ~/.local/share/wtfssd/watch.log
+wtfssd optimize uninstall-agent
+wtfssd optimize install-agent
+```
+
+### History empty
+
+You only used `--no-history`, or never completed a successful scan, or data
+dir was deleted. Run `wtfssd scan` once without `--no-history`.
+
+### JSON parse errors in scripts
+
+Always check exit code; on failure stderr may hold a warning. Prefer:
+
+```sh
+wtfssd scan --json --no-history > /tmp/out.json
+```
+
+### Still stuck
+
+1. Re-read [README troubleshooting](README.md#12-troubleshooting)  
+2. Run `wtfssd scan --json` and inspect `findings`  
+3. Open a GitHub issue with OS version, `python3 --version`, and the error  
 
 ---
 
-## Not supported
+# Part 7 — Safety summary
 
-- Native menu bar app (`menubar/` — unmaintained archive)
-- SwiftBar plugin (`contrib/swiftbar/` — unmaintained archive)
-- Windows / Linux, Docker cleanup as a product feature, fleet/remote monitoring
+| Rule | Detail |
+|------|--------|
+| Dry-run default | `clean` needs `--apply` to change disk |
+| Trash default | Recoverable until you empty Trash |
+| App guards | Skip if owning app running (unless `--force`) |
+| Backup-first | Live chat DB copied under `…/wtfssd/backups/` first |
+| Denylist | No escapes outside `$HOME`; no Documents/Desktop/… |
+| Monitoring writes | Only history/metrics/alerts/baselines under share dir |
+| Secrets | Opt-in; paths/lines/rules only — never values |
 
 ---
 
-## Tests (developers)
+# Part 8 — Not product
+
+| Path | Status |
+|------|--------|
+| `menubar/` | Unmaintained archive — do not install |
+| `contrib/swiftbar/` | Unmaintained archive — do not install |
+
+---
+
+# Part 9 — Developers
 
 ```sh
 python3 -m unittest discover -s tests -v
+python3 -m unittest tests.test_cli -v
 ```
+
+When you change flags in `wtfssd/cli.py`, update **this file and README**
+in the same change.
+
+### Related docs
+
+| Doc | Role |
+|-----|------|
+| [README.md](README.md) | Why + idiot-proof first hour + troubleshooting story |
+| [AGENTS.md](AGENTS.md) | Repo map for coding agents |
+| [docs/superpowers/specs/2026-08-02-resource-ethical-v2.md](docs/superpowers/specs/2026-08-02-resource-ethical-v2.md) | Current product rules (tiers, agents, CLI-only) |
+| [IDEA-SSD.txt](IDEA-SSD.txt) | Source article thesis |
