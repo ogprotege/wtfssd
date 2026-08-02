@@ -50,11 +50,14 @@ Collectors are **allow-lists** in config (`tiers.micro` / `tiers.fast` / `tiers.
 |------|------|----------------------|---------------|
 | `--micro` | micro | swap, disk, processes, pressure | &lt; 100 ms |
 | `--fast` | fast | micro + smart, system, backup, retention, launchd, spotlight, mcp | &lt; 500 ms typical |
-| *(default)* | full | fast + statedirs, apfs, crashes, churn, fds, secrets, logs, gitwatch, **writerate** | seconds OK |
+| *(default)* | full | fast + **AI-core statedirs**, apfs, crashes, churn, fds, secrets, logs, gitwatch, **writerate** | seconds OK |
+| `--bulk-state` | full + bulk | also Xcode / Docker / HF / Caches / models (slow walks) | slower full |
 
-- **writerate** (`iostat` ~1 s) and **statedirs** (directory walks) run on **full only**.
+- **writerate** (`iostat` ~1 s) runs on **full only**.
+- **statedirs** on full default = AI-core only (Cursor, Claude, Codex, VS Code, Windsurf, Zed, …).
+- **`--bulk-state`** adds expensive trees: DerivedData, Docker, Hugging Face, `~/Library/Caches`, Ollama, etc.
+- `optimize headroom` always sizes with bulk so “what is eating space” stays honest.
 - If both `--micro` and `--fast` are set, **micro wins** (stderr warning).
-- `--bulk-state` is reserved for a later stage (bulk Xcode/Docker/Caches); not required yet.
 
 Live check:
 
@@ -75,6 +78,7 @@ wtfssd scan --no-history          # do not append history.jsonl / metrics.db
 wtfssd scan --micro               # menu-bar-safe vitals
 wtfssd scan --fast                # cheap counters, no statedirs/writerate
 wtfssd scan --micro --json --no-history
+wtfssd scan --bulk-state          # full + Xcode/Docker/Caches/models sizing
 ```
 
 ---

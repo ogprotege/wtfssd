@@ -31,7 +31,7 @@ When every stage below is complete, all of the following must be true:
 
 - [x] `wtfssd scan --micro` finishes in **&lt; 100 ms** wall time on a warm machine (no iostat, no smartctl, no `du` walks). — **0.09 s** (2026-08-02)
 - [x] `wtfssd scan --fast` finishes in **&lt; 500 ms** typical (no writerate, no statedirs walk). — **0.21 s** (2026-08-02)
-- [ ] `wtfssd scan` (full) still runs forensic collectors; AI-core statedirs every full scan; **bulk** statedirs only when `--bulk-state` or daily policy.
+- [x] `wtfssd scan` (full) still runs forensic collectors; AI-core statedirs every full scan; **bulk** statedirs only when `--bulk-state` or daily policy. — verified 2026-08-02
 - [ ] Menubar default refresh is **≥ 5 min** and uses **micro** (or status-file) path — not full `--fast` with iostat.
 - [ ] `optimize install-agent` installs **at most one** continuous agent by default (hourly full **or** menubar-owned; no dual 5‑min + hourly stack as default).
 - [x] `state.growth` does not fire until **≥ 3 calendar days** of comparable full statedirs samples exist and rate is within a sanity cap. — verified live 2026-08-02
@@ -68,7 +68,7 @@ When every stage below is complete, all of the following must be true:
 | **A** | Spec stub + branch | Lock decisions before code thrash | Yes (short) | **DONE 2026-08-02** |
 | **1** | True tier allow-lists | Unblocks every later continuous path | Code session 1 | **DONE 2026-08-02** |
 | **2** | Growth trust gates | Stops false panic findings | Code session 2 | **DONE 2026-08-02** |
-| **3** | State registry split | Removes expensive walks from default full | Code session 3 | pending |
+| **3** | State registry split | Removes expensive walks from default full | Code session 3 | **DONE 2026-08-02** |
 | **4** | Single-scheduler agents | Stops dual LaunchAgent stack | Code session 4 |
 | **5** | Menubar micro path | Makes UI ethical by default | Code session 5 |
 | **6** | Docs + verification | Ship confidence | Final session |
@@ -698,6 +698,11 @@ git commit -m "history: gate state.growth on samples, span, and sanity cap"
 
 # STAGE 3 — State registry split (AI-core vs bulk)
 
+> **STATUS: COMPLETED 2026-08-02** (subagent-driven)  
+> Commits: `514b6e1` statedirs AI/bulk; `4200c0d` headroom bulk  
+> Live: default full **10** AI-core keys; `--bulk-state` **18** keys  
+> Suite: **220 OK**
+
 **Goal:** Full scans still measure agentic state cheaply; expensive walks of Caches/Docker/Xcode/HF become opt-in bulk.
 
 ### Task 3.1: Split `STATE_DIRS` and collect API
@@ -794,7 +799,18 @@ git commit -m "statedirs: AI-core by default; bulk paths behind --bulk-state"
 
 - [ ] **Step 3: Commit** if code changed.
 
-**Stage 3 done when:** default full scan no longer walks `Library/Caches` / Docker / HF; headroom still can.
+**Stage 3 done when:** default full scan no longer walks `Library/Caches` / Docker / HF; headroom still can. **MET** (AI-only keys on default full; headroom uses `include_bulk=True`).
+
+### Stage 3 completion log
+
+| Field | Value |
+|-------|--------|
+| Completed | 2026-08-02 |
+| Mode | Subagent-driven (3.1 + 3.2) |
+| Commits | `514b6e1`, `4200c0d` |
+| AI-core keys | 10 |
+| Bulk keys | 8 (opt-in) |
+| Next | **Stage 4** — single-scheduler agents |
 
 ---
 

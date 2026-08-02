@@ -78,7 +78,8 @@ flags or the package name change.
 |------|----------------------|-------------|
 | `--micro` | swap, disk, processes, pressure | Frequent UI / polling |
 | `--fast` | micro + smart, system, backup, retention, launchd, spotlight, mcp | Occasional quick check |
-| *(default)* | full forensic incl. statedirs + **writerate** | On-demand diagnose |
+| *(default)* | full forensic: AI-core statedirs + **writerate** | On-demand diagnose |
+| `--bulk-state` | full + Xcode/Docker/Caches/models walks | Weekly headroom audit |
 
 Exit codes for `scan` / `watch --once` / `digest`: `0` no findings,
 `1` warnings only, `2` any critical finding, `3` internal error. `clean`
