@@ -126,18 +126,93 @@ def render_json(report: HealthReport, findings: list[Finding]) -> str:
     return json.dumps(payload, indent=2)
 
 
-def render_history(history: list[HealthReport]) -> str:
-    header = (f"{'TIMESTAMP':<20} {'TB WRITTEN':>10} {'WEAR %':>7} "
+def _history_tier_label(r: HealthReport) -> str:
+    """Human tier for the history table. Legacy rows without scan_tier are inferred."""
+    tier = getattr(r, "scan_tier", None)
+    if tier in ("micro", "fast", "full"):
+        label = tier
+    else:
+        # Pre-tier-field history: statedirs.note means skipped → not a full measure.
+        if r.statedirs.note:
+            label = "fast?" if r.smart.available else "micro?"
+        elif not r.smart.available and r.disk is not None:
+            # SMART missing but disk present — likely cheap/partial pass
+            label = "partial?"
+        else:
+            label = "full"
+    if getattr(r, "bulk_state", False) and label.startswith("full"):
+        label = "full+b"
+    return label
+
+
+def _history_state_gb(r: HealthReport) -> str:
+    """Never show 0.0 for unmeasured state (fast/micro placeholders)."""
+    if r.statedirs.note:
+        return "—"
+    return f"{r.statedirs.total_bytes / 1e9:.1f}"
+
+
+def _history_smart_tb(r: HealthReport) -> str:
+    if not r.smart.available or r.smart.tb_written is None:
+        return "—"
+    return f"{r.smart.tb_written:.1f}"
+
+
+def _history_smart_wear(r: HealthReport) -> str:
+    if not r.smart.available or r.smart.percent_used is None:
+        return "—"
+    return f"{r.smart.percent_used}"
+
+
+def render_history(history: list[HealthReport], *,
+                   full_only: bool = False) -> str:
+    """Trend table. Unmeasured cells are em-dash, not 0.0.
+
+    full_only: drop micro/fast rows so STATE/SMART trends stay comparable.
+    """
+    rows = list(history)
+    skipped = 0
+    if full_only:
+        kept: list[HealthReport] = []
+        for r in rows:
+            tier = _history_tier_label(r)
+            if tier.startswith("full"):
+                kept.append(r)
+            else:
+                skipped += 1
+        rows = kept
+
+    header = (f"{'TIMESTAMP':<20} {'TIER':<7} {'TB WRITTEN':>10} {'WEAR %':>7} "
               f"{'FREE GB':>9} {'SWAP GB':>8} {'STATE GB':>9}")
     lines = [header, "-" * len(header)]
-    for r in history:
-        tb = f"{r.smart.tb_written:.1f}" if r.smart.tb_written is not None else "-"
-        wear = f"{r.smart.percent_used}" if r.smart.percent_used is not None else "-"
-        free = f"{r.disk.avail_gb:.0f}" if r.disk else "-"
-        swap = f"{r.swap.used_mb / 1024:.1f}" if r.swap else "-"
-        state = f"{r.statedirs.total_bytes / 1e9:.1f}"
-        lines.append(f"{r.timestamp:<20} {tb:>10} {wear:>7} "
+    unmeasured_state = 0
+    for r in rows:
+        tier = _history_tier_label(r)
+        tb = _history_smart_tb(r)
+        wear = _history_smart_wear(r)
+        free = f"{r.disk.avail_gb:.0f}" if r.disk else "—"
+        swap = f"{r.swap.used_mb / 1024:.1f}" if r.swap else "—"
+        state = _history_state_gb(r)
+        if state == "—":
+            unmeasured_state += 1
+        lines.append(f"{r.timestamp:<20} {tier:<7} {tb:>10} {wear:>7} "
                      f"{free:>9} {swap:>8} {state:>9}")
+
+    if not rows:
+        lines.append("(no rows to show)")
+    else:
+        notes: list[str] = []
+        if full_only and skipped:
+            notes.append(f"hid {skipped} micro/fast row(s); use without "
+                         f"--full-only to see them")
+        if unmeasured_state and not full_only:
+            notes.append(
+                f"{unmeasured_state} row(s) have STATE — (not measured: "
+                f"micro/fast tier). Compare STATE only across full rows.")
+        if notes:
+            lines.append("")
+            for n in notes:
+                lines.append(f"note: {n}")
     return "\n".join(lines)
 
 

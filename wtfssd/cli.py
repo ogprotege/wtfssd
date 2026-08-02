@@ -141,6 +141,8 @@ def build_report(config: dict, fast: bool = False, *,
                     config.get("git", {}).get("repos", []))
                   if want("gitwatch")
                   else GitWatchReport(available=False, error=note)),
+        scan_tier=tier,
+        bulk_state=include_bulk,
     )
 
 
@@ -315,10 +317,12 @@ def cmd_optimize(args: argparse.Namespace) -> int:
 
 def cmd_history(args: argparse.Namespace) -> int:
     entries = history.load_history(limit=args.last)
+    full_only = bool(getattr(args, "full_only", False))
     if args.json:
+        # JSON keeps all loaded rows; clients can filter on scan_tier.
         print(json.dumps([report_to_dict(r) for r in entries], indent=2))
     else:
-        print(report_mod.render_history(entries))
+        print(report_mod.render_history(entries, full_only=full_only))
     return 0
 
 
@@ -492,7 +496,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--last", type=int, default=None, metavar="N",
                    help="show only the last N history rows")
     p.add_argument("--json", action="store_true",
-                   help="print JSON history entries")
+                   help="print JSON history entries (includes scan_tier)")
+    p.add_argument(
+        "--full-only", action="store_true", dest="full_only",
+        help="hide micro/fast rows so STATE/SMART columns stay comparable",
+    )
     p.set_defaults(func=cmd_history)
 
     p = sub.add_parser(

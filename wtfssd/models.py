@@ -277,6 +277,10 @@ class HealthReport:
     spotlight: SpotlightReport = field(default_factory=lambda: SpotlightReport(available=False))
     logs: LogsReport = field(default_factory=lambda: LogsReport(available=False))
     gitwatch: GitWatchReport = field(default_factory=lambda: GitWatchReport(available=False))
+    # Recorded so history can tell full vs fast/micro and bulk vs AI-core.
+    # None = legacy history row (infer at display time from statedirs/smart).
+    scan_tier: Optional[str] = None   # "micro" | "fast" | "full" | None
+    bulk_state: bool = False          # True when bulk statedirs were included
 
 
 def report_to_dict(report: HealthReport) -> dict[str, Any]:
@@ -323,6 +327,12 @@ def report_from_dict(d: dict[str, Any]) -> HealthReport:
     external = [SmartReport(**{k: v for k, v in s.items()
                                if k in SmartReport.__dataclass_fields__})
                 for s in d.get("external_smart", [])]
+    raw_tier = d.get("scan_tier")
+    tier: Optional[str]
+    if raw_tier in ("micro", "fast", "full"):
+        tier = raw_tier
+    else:
+        tier = None  # legacy row — display layer infers
     return HealthReport(
         timestamp=d["timestamp"],
         host_ram_gb=d["host_ram_gb"],
@@ -347,6 +357,8 @@ def report_from_dict(d: dict[str, Any]) -> HealthReport:
         spotlight=_sub(SpotlightReport, "spotlight"),
         logs=_sublist(LogsReport, StateDir, "logs", "top"),
         gitwatch=_sublist(GitWatchReport, RepoStatus, "gitwatch", "repos"),
+        scan_tier=tier,
+        bulk_state=bool(d.get("bulk_state", False)),
     )
 
 

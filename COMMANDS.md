@@ -338,17 +338,35 @@ rm -f ~/Library/LaunchAgents/com.wtfssd.watch*.plist
 ## `history` — trends
 
 ```text
-wtfssd history [--last N] [--json]
+wtfssd history [--last N] [--json] [--full-only]
 ```
 
 ```sh
 wtfssd history
 wtfssd history --last 30
+wtfssd history --full-only      # hide micro/fast rows (comparable STATE/SMART)
 wtfssd history --json
 ```
 
 Built from `~/.local/share/wtfssd/history.jsonl` (rows from past `scan` /
 `watch` that did not use `--no-history`).
+
+**How to read the table**
+
+| Column | Meaning |
+|--------|---------|
+| `TIER` | `full` / `fast` / `micro` (or `fast?` / `micro?` for old rows before tier was stored). `full+b` = full with bulk state dirs |
+| `TB WRITTEN` / `WEAR %` | SMART lifetime stats, or `—` if not measured that pass |
+| `FREE GB` / `SWAP GB` | Disk free and swap used |
+| `STATE GB` | Sized AI/tool state, or `—` if that pass skipped statedirs (**not** “zero state”) |
+
+Do **not** compare `STATE GB` across rows with different tiers. Prefer:
+
+```sh
+wtfssd history --full-only
+```
+
+A footer note explains how many rows had unmeasured STATE when you show all tiers.
 
 ---
 
