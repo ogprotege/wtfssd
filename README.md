@@ -29,12 +29,14 @@ Full flag encyclopedia and workflows: **[COMMANDS.md](COMMANDS.md)**.
 8. [Stop the mess coming back](#8-stop-the-mess-coming-back)
 9. [Optional: hourly check + notifications](#9-optional-hourly-check--notifications)
 10. [Scan “gears” (micro / fast / full / bulk)](#10-scan-gears-micro--fast--full--bulk)
-11. [Configuration for normal humans](#11-configuration-for-normal-humans)
-12. [Troubleshooting](#12-troubleshooting)
-13. [FAQ](#13-faq)
-14. [Safety rules (read once)](#14-safety-rules-read-once)
-15. [Where files live](#15-where-files-live)
-16. [Docs map & license](#16-docs-map--license)
+11. [How thorough is a scan? (coverage + no sudo)](#11-how-thorough-is-a-scan-coverage--no-sudo)
+12. [Reading `history` (truthful trends)](#12-reading-history-truthful-trends)
+13. [Configuration for normal humans](#13-configuration-for-normal-humans)
+14. [Troubleshooting](#14-troubleshooting)
+15. [FAQ](#15-faq)
+16. [Safety rules (read once)](#16-safety-rules-read-once)
+17. [Where files live](#17-where-files-live)
+18. [Docs map & license](#18-docs-map--license)
 
 ---
 
@@ -408,7 +410,155 @@ includes bulk for ranking).
 
 ---
 
-## 11. Configuration for normal humans
+## 11. How thorough is a scan? (coverage + no sudo)
+
+### Short answer
+
+**Default `wtfssd scan` is thorough for this product’s job** — “is agentic/IDE
+software drowning my Mac?” — **without** asking for your password.
+
+It is **not** a root-level forensic suite of the entire operating system.
+That is intentional.
+
+| Question | Answer |
+|----------|--------|
+| Does full scan check “everything on the Mac”? | **No.** |
+| Does it check everything in scope for vibe-coding SSD panic? | **Yes, for non-root signals.** |
+| Does it use `sudo`? | **Never.** No password prompts. Ever. |
+| Max thoroughness command | `wtfssd scan --bulk-state` + optional config (below) |
+
+### Why no sudo (on purpose)
+
+1. **Safe to run anytime** — no “trust this with root?” moment  
+2. **Works the same** for every user account without admin  
+3. **Resource ethics** — root tools like continuous `fs_usage` / `powermetrics`
+   can themselves hammer the machine  
+4. **smartctl on Apple Silicon** usually works **without** sudo for the
+   internal NVMe (install smartmontools)
+
+If something truly needs root, the collector is **out of product scope**
+rather than half-implemented behind a password.
+
+### What default `scan` (full) *does* check
+
+| Collector | How (no root) | What you learn |
+|-----------|---------------|----------------|
+| **smart** | `smartctl` on internal disk | Wear %, TB written, health, media errors |
+| **swap** | `sysctl vm.swapusage` | Swap pressure (article’s smoking gun) |
+| **disk** | `df` on data volume | Free space / headroom floor |
+| **pressure** | `sysctl` / `memory_pressure` | Memory pressure level |
+| **processes** | `ps` | IDE process count, ghost age, RSS feed |
+| **system** | `sysctl` boot time, `pmset` throttle, `ioreg` battery | Uptime, thermal throttle, battery health |
+| **backup** | `tmutil` (user-visible) | Time Machine configured? destination present? age? |
+| **retention** | Read Claude/Cursor settings files | Cleanup policies missing? |
+| **launchd** | List LaunchAgents/Daemons vs baseline | New persistence / relaunchers |
+| **spotlight** | `ps` + `mdutil` | Indexer storms |
+| **mcp** | Claude desktop config + `pgrep` | MCP fleet / orphans |
+| **statedirs** | Walk **AI-core** paths (Cursor, Claude, Codex, …) | Agentic state size |
+| **apfs** | `tmutil` / `diskutil` (non-root) | Local snapshot pressure |
+| **crashes** | Read `~/Library/Logs/DiagnosticReports` | Crash frequency |
+| **churn** | Index snapshot turnover vs baseline | Create/destroy write churn |
+| **fds** | `lsof` (what your user can see) | Open-file blowups |
+| **logs** | Size `~/Library/Logs` (+ config extras) | Log growth |
+| **gitwatch** | `git status` on **configured** repos only | Uncommitted / unpushed work |
+| **secrets** | Only if `secrets.enabled: true` | Path/line/rule hits — never values |
+| **writerate** | `iostat` (~1 s sample) | Live write MB/s |
+| **external SMART** | Only if you list devices in config | External drive health |
+
+### What `--bulk-state` adds
+
+Same as full, **plus** sizing of heavy non-AI trees:
+
+- Xcode DerivedData, Docker Desktop data, Hugging Face / Ollama / LM Studio /
+  MLX caches, JetBrains, large `~/Library/Caches`
+
+Use when free space is the question:
+
+```sh
+wtfssd scan --bulk-state
+wtfssd optimize headroom    # also sizes bulk for ranking
+```
+
+### Maximum thoroughness *within* the product (still no sudo)
+
+```sh
+brew install smartmontools          # if not installed
+
+# Optional config (~/.config/wtfssd/config.json):
+#   "secrets": { "enabled": true }
+#   "git": { "repos": ["/Users/YOU/code/app"] }
+#   "smart": { "external_devices": ["/dev/disk2"] }
+#   "projects": ["/Users/YOU/code"]
+#   "logs": { "extra_dirs": ["/path/to/more/logs"] }
+
+wtfssd scan --bulk-state
+```
+
+That is the **most complete** scan wtfssd is designed to run.
+
+### What we deliberately do **not** check (needs root or out of scope)
+
+| Not checked | Why | Typical root tool |
+|-------------|-----|-------------------|
+| Die temps / fan RPM streams | Needs privileged SMC access | `sudo powermetrics` |
+| Physical swapfiles under `/var/vm` | Root-only listing | `sudo ls /var/vm` |
+| System-wide `fs_usage` / every process I/O | Root + heavy | `sudo fs_usage` |
+| Full-disk `du` of entire Macintosh HD | Slow, noisy, not the product | manual `du` |
+| Other users’ home directories | Privacy + permissions | — |
+| Kernel extensions / SIP deep audit | Different product | — |
+| Network sockets / firewall / MDM | Out of scope | — |
+| Token/API cost tracking | Different product (e.g. token-monitor) | — |
+
+**You can still run those by hand** when you care:
+
+```sh
+# Examples — optional, not part of wtfssd:
+sudo powermetrics --samplers smc -n 1
+sudo ls -lh /var/vm
+```
+
+wtfssd will not wrap them. That keeps the tool password-free and aligned
+with “don’t become the workload.”
+
+### So can you “be sure”?
+
+| Claim | Sure? |
+|-------|--------|
+| SSD wear (if smartmontools works) | Yes — drive’s own SMART |
+| Swap / free space / IDE ghosts / AI state sizes | Yes — full scan |
+| Biggest non-AI disk hogs | Yes — with `--bulk-state` or `headroom` |
+| Everything a root admin could measure | **No** — and we won’t pretend otherwise |
+| That missing root checks hide “dying SSD” | Unlikely — SMART + free space + swap cover the article’s failure modes |
+
+---
+
+## 12. Reading `history` (truthful trends)
+
+```sh
+wtfssd history                 # all rows: see tiers + dashes
+wtfssd history --full-only     # only full (comparable STATE / SMART)
+wtfssd history --last 30
+```
+
+| Column | Meaning |
+|--------|---------|
+| **TIER** | `full` / `fast` / `micro` (or `fast?` / `micro?` on old rows before tier was stored). `full+b` = full with bulk dirs |
+| **TB WRITTEN / WEAR %** | SMART, or `—` if that pass didn’t collect SMART |
+| **FREE / SWAP** | Disk free and swap used |
+| **STATE GB** | Sized tool state, or `—` if **not measured** (not “zero state”) |
+
+**Rules of thumb**
+
+1. Prefer **`history --full-only`** when comparing STATE over days.  
+2. Ignore `—` cells for trends — those passes skipped that collector.  
+3. Big step-changes in STATE often mean **what we count changed** (registry /
+   bulk / AI-core), not only that files grew overnight.  
+4. New scans after the history update store real `scan_tier` so labels stop
+   needing `?`.
+
+---
+
+## 13. Configuration for normal humans
 
 Optional file:
 
@@ -442,7 +592,7 @@ More keys: [COMMANDS.md — Config](COMMANDS.md#configuration-people-actually-ch
 
 ---
 
-## 12. Troubleshooting
+## 14. Troubleshooting
 
 ### “command not found: wtfssd”
 
@@ -561,7 +711,7 @@ python3 -m unittest discover -s tests -v
 
 ---
 
-## 13. FAQ
+## 15. FAQ
 
 **Q: Will this wear out my SSD by scanning?**  
 A: A full scan a few times a day is noise compared to agentic IDEs. That’s why
@@ -587,12 +737,23 @@ paths (Documents, Desktop, …) and paths outside your home are denied.
 A: Off by default. Enable only if you want path/line/rule hits in agent state
 files — it never prints the secret values.
 
+**Q: Why won’t you use sudo for “complete” checks?**  
+A: So every scan stays password-free, safe, and light. Root-only signals
+(swapfile listing, continuous SMC temps, system-wide fs_usage) are listed in
+[§11](#11-how-thorough-is-a-scan-coverage--no-sudo). Run those tools yourself
+if you need them; wtfssd covers the article’s failure modes without root.
+
+**Q: What’s the most thorough scan I can run?**  
+A: `brew install smartmontools`, optional config for `git.repos` /
+`smart.external_devices` / `secrets.enabled`, then  
+`wtfssd scan --bulk-state`.
+
 **Q: Where is the long command list?**  
 A: **[COMMANDS.md](COMMANDS.md)**.
 
 ---
 
-## 14. Safety rules (read once)
+## 16. Safety rules (read once)
 
 1. `clean` without `--apply` **cannot** delete.  
 2. Prefer Trash over `--hard`.  
@@ -603,7 +764,7 @@ A: **[COMMANDS.md](COMMANDS.md)**.
 
 ---
 
-## 15. Where files live
+## 17. Where files live
 
 | Path | What |
 |------|------|
@@ -616,7 +777,7 @@ A: **[COMMANDS.md](COMMANDS.md)**.
 
 ---
 
-## 16. Docs map & license
+## 18. Docs map & license
 
 | Document | Who it’s for |
 |----------|----------------|

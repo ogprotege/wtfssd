@@ -61,5 +61,15 @@ Do not stack multiple continuous pollers.
 
 - Native menu bar / GUI product maintenance
 - Token/cost tracking, multi-device sync
-- Sudo thermal sensors, write-latency probes
+- **Any `sudo` / root requirement** — monitors that only work as root
+  (`powermetrics`, `/var/vm` listing, continuous `fs_usage`) stay out of
+  product. Document the gap; do not half-wrap them.
+- Write-latency probes that write to the SSD to measure it
 - New clean mutation surfaces beyond existing targets
+
+## Thoroughness claim
+
+Default `scan` (full tier) is thorough for **agentic/IDE drowning** signals
+without root. Maximum in-product pass is `scan --bulk-state` plus optional
+config (`secrets`, `git.repos`, `smart.external_devices`). It is **not** a
+claim of “every macOS metric possible.”
