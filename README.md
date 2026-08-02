@@ -1,199 +1,113 @@
 # wtfssd
 
-Why is my Mac's SSD busy / full / "dying"? A zero-dependency Python 3 CLI that
-monitors SSD wear, swap pressure, storage headroom, ghost IDE processes, and
-agentic-IDE state growth — then alerts you, cleans safely, and fixes the churn
-at its source. It also watches memory pressure, uptime, thermal throttle and
-battery state, APFS local snapshots, Time Machine backup readiness, IDE crash
-frequency, live write rate, and external drives — plus per-process RSS leak
-slopes, open-file-descriptor counts, the MCP server fleet, indexer snapshot
-churn, retention-config posture, launchd persistence changes, Spotlight
-indexer load, log growth, and uncommitted/unpushed work across your git
-repos. An opt-in secrets scanner (off by default) flags API keys and tokens
-left lying in agent state — it reports file, line, and rule name only, never
-the secret itself.
+**Why is my Mac’s SSD busy / full / “dying”?**
 
-It exists because of the vibe-coding SSD panic: after months of heavy agentic
-coding (dozens of parallel agents, IDEs scaffolding apps autonomously), developers
-started blaming their soldered-in SSDs for machines that ran hot, beachballed,
-and filled up. The field data tells a different story — drives reporting
-"PASSED" at 2% wear after 54 TB written, while the *software* around them
-drowns: 25 GB of swap on a 16 GB machine, Cursor helper processes alive for 27
-days, a `state.vscdb` chat database growing ~1 GB/day with no retention policy,
-and indexer snapshot churn that regenerates the moment you delete it. The SSD
-was never dying; it was trapped inside an unhealthy software environment.
-`wtfssd` measures all of that directly — SMART wear from the drive's own
-counters, not vibes — and gives you the cleanup and guardrails the IDEs don't.
+A **zero-dependency Python 3 CLI for macOS** that answers that question
+honestly: SMART wear from the drive itself, plus swap, free space, ghost IDE
+helpers, and agentic tool state — then alerts, cleans regenerable junk safely,
+and reduces indexer churn.
+
+The usual story after heavy agentic coding is not a dead soldered SSD. It’s
+**unbounded local state and process lifecycle mess**. `wtfssd` measures that
+and gives you a safe way to mop up.
+
+**CLI only.** No supported menu bar app. Optional: one hourly LaunchAgent for
+notifications. Full recipes: **[COMMANDS.md](COMMANDS.md)**.
+
+---
 
 ## Requirements
 
-- macOS on Apple Silicon (Intel Macs work, but SMART coverage varies)
-- Python 3.10+ — no third-party dependencies, standard library only
-- [smartmontools](https://www.smartmontools.org/) for ground-truth SSD wear:
-  `brew install smartmontools` (without it everything else works; the SMART
-  section reports "unavailable")
+- macOS (Apple Silicon primary; Intel varies for SMART)
+- Python 3.10+
+- Optional: [smartmontools](https://www.smartmontools.org/)  
+  `brew install smartmontools` — without it, everything else still works
+
+---
 
 ## Install
 
-From source, no install needed:
-
 ```sh
-git clone <this repo> && cd wtfssd
-python3 -m wtfssd scan
-```
+git clone https://github.com/ogprotege/wtfssd.git && cd wtfssd
+python3 -m wtfssd scan          # run from source, no install
 
-Or install the `wtfssd` command into an isolated environment:
-
-```sh
+# or:
 pipx install .
 wtfssd scan
 ```
 
+Legacy command name `ssdwtf` still works after install (same entry point).
+
+---
+
 ## Quick start
 
 ```sh
-wtfssd scan              # full health report (forensic tier)
-wtfssd scan --json       # same, machine-readable
-wtfssd scan --micro      # cheap vitals only (~0.1 s; no iostat / du)
-wtfssd scan --fast       # cheap counters; no statedirs walks, no writerate
-wtfssd clean             # dry-run: lists what *would* be cleaned, deletes nothing
-wtfssd clean cursor-caches --apply   # actually clean (moves to Trash)
-wtfssd optimize ignore ~/my-project  # write/merge .cursorignore churn rules
-wtfssd optimize headroom             # free-space floor status + top consumers
-wtfssd optimize install-agent        # optional ONE hourly LaunchAgent
-                                     # (--mode hourly|fast|both|none; see COMMANDS.md)
-wtfssd watch --once      # single monitor pass + Notification Center alerts
-wtfssd history           # trend table built from past scans
-wtfssd digest            # one-look daily summary
-wtfssd config --show     # effective config (defaults + your overrides)
+wtfssd scan                          # full health report
+wtfssd clean                         # dry-run: what could be reclaimed
+wtfssd clean cursor-caches --apply   # actually clean (→ Trash)
+wtfssd optimize ignore ~/my-project  # .cursorignore to cut indexer churn
+wtfssd optimize install-agent        # optional: one hourly notify scan
 ```
 
-**Full command reference (flags, clean targets, paths, naming):** see
-[COMMANDS.md](COMMANDS.md). Keep that file and this README consistent when
-flags or the package name change.
+| Need | Command |
+|------|---------|
+| Cheap vitals (~0.1s) | `wtfssd scan --micro` |
+| Medium check | `wtfssd scan --fast` |
+| Full diagnose | `wtfssd scan` |
+| Include Xcode/Docker/Caches sizes | `wtfssd scan --bulk-state` |
+| Trends | `wtfssd history` |
+| Daily summary | `wtfssd digest` |
+| Config | `wtfssd config --show` |
 
-### Product surface: CLI only
+Exit codes (`scan` / `watch --once` / `digest`): **0** ok · **1** warnings ·
+**2** critical · **3** error.
 
-`wtfssd` is a **command-line tool**. Supported workflows are on-demand
-commands plus an optional single LaunchAgent for scheduled
-`watch --once` + Notification Center. There is **no supported GUI or menu
-bar product**. Trees under `menubar/` and `contrib/swiftbar/` are
-**unmaintained archives** — do not install them for normal use.
+→ **All workflows, clean targets, agent modes, paths:** [COMMANDS.md](COMMANDS.md)
 
-### Scan tiers (resource-ethical defaults)
+---
 
-| Flag | Collectors (summary) | When to use |
-|------|----------------------|-------------|
-| `--micro` | swap, disk, processes, pressure | Scripted / frequent cheap checks |
-| `--fast` | micro + smart, system, backup, retention, launchd, spotlight, mcp | Occasional quick check |
-| *(default)* | full forensic: AI-core statedirs + **writerate** | On-demand diagnose |
-| `--bulk-state` | full + Xcode/Docker/Caches/models walks | Weekly headroom audit |
+## Safety
 
-Exit codes for `scan` / `watch --once` / `digest`: `0` no findings,
-`1` warnings only, `2` any critical finding, `3` internal error. `clean`
-exits `0`, or `3` on an unknown target.
+- **`clean` is dry-run by default** — nothing moves until `--apply`
+- **Trash, not `rm`** (unless you pass `--hard --apply`)
+- **App guards** — skips targets if Cursor/Claude/etc. appear running
+- **Backup-first** for the live Cursor chat database
+- **Denylist** — never touches home root, Documents/Desktop/media folders, or paths outside `$HOME`
+- Monitoring commands only write history/metrics/alerts under `~/.local/share/wtfssd`
 
-## Safety model
-
-`wtfssd` is built to be less scary than the problem it diagnoses:
-
-- **Dry-run by default.** `clean` never touches a file unless you pass `--apply`.
-- **Trash, not `rm`.** Applied cleans move items to `~/.Trash` so you can
-  inspect and restore. `--hard` deletes permanently only when you ask for it.
-- **App guards.** Cleaning a target whose owning app is running (e.g. Cursor)
-  is skipped with an explanation; `--force` overrides.
-- **Backup-first.** High-risk targets (the Cursor chat database) are copied to
-  `~/.local/share/wtfssd/backups/` before removal.
-- **Denylist.** Paths outside your home directory, your home directory itself,
-  and `Documents`/`Desktop`/`Movies`/`Music`/`Pictures` are never touched.
-- **Read-only monitoring.** `scan`, `watch`, `history`, and `config` only read
-  the system; the only writes are scan history, the metrics baseline, alert
-  state, and churn/launchd baselines under `~/.local/share/wtfssd`.
-- **Opt-in secrets scanning.** The secrets scanner does nothing unless you
-  set `secrets.enabled: true`. It reports only the file path, line number,
-  and which rule matched — the matched value is never displayed or stored.
+---
 
 ## Configuration
 
-Defaults live in the code; override any of them in
-`~/.config/wtfssd/config.json` (see the path with `wtfssd config --path`).
-Only the keys you set are overridden — everything is deep-merged with defaults.
-
-Example — alert on swap earlier than the 8 GB default:
+Optional file: `~/.config/wtfssd/config.json` (deep-merged over defaults).
 
 ```json
 {
-  "swap": { "warn_gb": 4.0, "crit_gb": 12.0 }
+  "swap": { "warn_gb": 4.0 },
+  "projects": ["/Users/you/code"],
+  "watch": { "agent_mode": "hourly" }
 }
 ```
 
-Other useful keys: `disk.warn_free_pct`, `procs.ghost_days`,
-`procs.leak_warn_mb_h` / `procs.leak_window_h` (RSS leak-slope alert),
-`state.vscdb_warn_gb`, `smart.device`, `smart.external_devices` (extra drives
-to probe, e.g. `["/dev/disk2"]`), `alerts.cooldown_hours` /
-`alerts.cooldown_critical_hours` (per-severity re-notify intervals, 24 h / 4 h),
-`watch.interval_minutes` / `watch.fast_interval_minutes` / `watch.agent_mode`,
-`projects` (directories scanned for stale `node_modules`),
-`tiers.micro` / `tiers.fast` / `tiers.full` (collector **allow-lists** per
-tier — not a slow deny-list), `state.growth_min_samples` /
-`state.growth_min_days` / `state.growth_max_gb_day` (growth finding gates),
-`backup.enabled` / `backup.warn_hours` / `backup.crit_hours`
-(Time Machine freshness), `apfs.snapshot_warn_days`,
-`pressure.sustained_min`, `crashes.warn_weekly` / `crashes.apps`,
-`thermal.warn_below`, `uptime.warn_days`, `writerate.warn_mb_s`,
-`battery.capacity_info_pct`, `churn.warn_turnover` / `churn.warn_gb`
-(snapshot churn), `fds.warn_count`, `mcp.config_path`,
-`secrets.enabled` (**opt-in — defaults to `false`**; the scanner reports
-paths, line numbers, and rule names only, never the matched values),
-`spotlight.warn_cpu_pct`, `logs.warn_gb_day` / `logs.extra_dirs`,
-`git.repos` (repositories watched for uncommitted/unpushed work) /
-`git.warn_changes` / `git.warn_unpushed`. Run `wtfssd config --show` for the
-full merged picture.
+See `wtfssd config --show` and [COMMANDS.md](COMMANDS.md) for keys people
+actually change.
 
-## How it works
+---
 
-- `wtfssd/collectors/` — read-only probes: SMART (`smartctl`, including the
-  NVMe critical-warning flag and the device-reported spare threshold), swap
-  (`sysctl`), disk (`df -k`, 1K-blocks converted to decimal GB), processes
-  (`ps`, including the per-IDE RSS feed behind leak-slope detection), agentic
-  state dirs (`du`-style sizing of an 18-entry categorized registry with a
-  double-count guard for nested paths), memory pressure
-  (`sysctl` / `memory_pressure`), uptime / thermal throttle / battery
-  (`sysctl` / `pmset` / `ioreg`), APFS local snapshots (`tmutil`), Time
-  Machine readiness (`tmutil destinationinfo`), crash frequency
-  (`~/Library/Logs/DiagnosticReports`), write rate (`iostat`), SMART for
-  external drives, snapshot churn (`.pack` create/destroy turnover vs a
-  stored baseline), open-fd counts (`lsof`), the MCP server fleet
-  (`claude_desktop_config.json` cross-checked with `pgrep`), retention-config
-  posture (e.g. `cleanupPeriodDays`), launchd persistence (LaunchAgent/Daemon
-  diff vs a stored baseline), Spotlight indexer load (`ps` / `mdutil`), log
-  growth (`~/Library/Logs` sizing), uncommitted/unpushed work (read-only
-  `git status` over configured repos), and the opt-in secrets scanner.
-- `wtfssd/analyze.py` — turns a report + history into severity-ranked
-  findings, plus a status for each of the ten domains shown above the
-  findings: drive, backup, headroom, memory, processes, state, stability,
-  telemetry, privacy, work (`ok` / `warn` / `critical`, or `unknown` when a
-  domain's collectors returned no data — absence of data is never reported
-  as `ok`). Memory-pressure warnings fire only when elevated pressure is
-  *sustained* — a majority of samples over `pressure.sustained_min`
-  minutes — so a momentary spike doesn't alert; level-4 critical pressure
-  always fires immediately.
-- `wtfssd/history.py` — JSONL scan history for trend and growth-rate analysis.
-- `wtfssd/metrics.py` — sqlite baseline store
-  (`~/.local/share/wtfssd/metrics.db`); every scan/watch pass records its
-  metrics there alongside the JSONL history.
-- `wtfssd/alerts.py` — Notification Center via `osascript`, transition-based
-  so it doesn't nag: a finding notifies when it's new, when its severity
-  escalates since the last notification (a warn→critical jump notifies
-  immediately, even inside the warn cooldown), or when its per-severity
-  cooldown elapses — warn findings re-notify at most every
-  `alerts.cooldown_hours` (24 h), critical ones every
-  `alerts.cooldown_critical_hours` (4 h). Info findings never notify.
-- `wtfssd/cleaners.py` — guarded, dry-run-first cleanup targets.
-- `wtfssd/optimize.py` — `.cursorignore` merging and optional LaunchAgents
-  (default: one hourly full agent; dual stack is opt-in `--mode both`;
-  see [COMMANDS.md](COMMANDS.md)).
-- `wtfssd/cli.py` — the `wtfssd` command (`--micro` / `--fast` / full tiers).
+## What it looks at (short)
+
+| Area | Examples |
+|------|----------|
+| Drive | SMART % used, media errors, TB written |
+| Memory | Swap, pressure, long-lived IDE helpers |
+| Storage | Free %, AI tool state dirs, optional bulk (Xcode/Docker/…) |
+| Stability | Crashes, thermal throttle, uptime, backup readiness |
+| Optional | Secrets-at-rest paths (opt-in), git dirtiness on configured repos |
+
+Collectors are **read-only** (except your explicit `clean` / `optimize` actions).
+
+---
 
 ## Tests
 
@@ -201,9 +115,18 @@ full merged picture.
 python3 -m unittest discover -s tests -v
 ```
 
-No network, no root, no third-party packages required. Tests that touch the
-filesystem run against temporary directories and fakes.
+No network, no root, no third-party packages.
+
+---
 
 ## License
 
 MIT
+
+## Docs map
+
+| Doc | Audience |
+|-----|----------|
+| [COMMANDS.md](COMMANDS.md) | **You at the keyboard** (workflows + flags) |
+| [AGENTS.md](AGENTS.md) | Coding agents working in this repo |
+| [docs/superpowers/specs/](docs/superpowers/specs/) | Design specs (resource-ethical v2 is current for tiers/agents) |

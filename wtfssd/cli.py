@@ -326,8 +326,8 @@ def cmd_digest(args: argparse.Namespace) -> int:
     config, warn = load_config()
     if warn:
         print(f"warning: {warn}", file=sys.stderr)
-    rep, findings, code = _run_scan(config, use_history=True,
-                                    fast=getattr(args, "fast", False))
+    rep, findings, code = _run_scan(
+        config, use_history=True, tier=_resolve_tier(args))
     days = args.days
     stats = {
         "days": days,
@@ -369,84 +369,154 @@ def cmd_config(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="wtfssd",
-        description="Why is my Mac's SSD busy/full/'dying' — monitor, alert, "
-                    "clean, optimize.")
-    sub = parser.add_subparsers(dest="command", required=True)
+        description=(
+            "macOS CLI: diagnose agentic-IDE disk/swap/process pressure, "
+            "alert, clean regenerable junk, and reduce indexer churn. "
+            "See COMMANDS.md for workflows."
+        ),
+        epilog="Common: wtfssd scan | wtfssd clean | wtfssd optimize install-agent",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    sub = parser.add_subparsers(dest="command", required=True,
+                                metavar="command")
 
-    p = sub.add_parser("scan", help="full health report")
-    p.add_argument("--json", action="store_true")
-    p.add_argument("--no-history", action="store_true")
-    p.add_argument("--micro", action="store_true",
-                   help="micro tier only (menu-bar safe: swap/disk/pressure/processes)")
-    p.add_argument("--fast", action="store_true",
-                   help="fast tier (no statedirs/writerate/forensics)")
-    p.add_argument("--bulk-state", action="store_true", dest="bulk_state",
-                   help="include Xcode/Docker/Caches/model dirs in statedirs (slow)")
+    # Shared tier flags (attached to scan / watch / digest)
+    def _add_tier_flags(ap: argparse.ArgumentParser) -> None:
+        ap.add_argument(
+            "--micro", action="store_true",
+            help="cheapest pass: swap, free disk, pressure, IDE process count "
+                 "(~0.1s; no SMART, no directory walks, no iostat)",
+        )
+        ap.add_argument(
+            "--fast", action="store_true",
+            help="medium pass: micro + SMART, system, backup, retention, "
+                 "launchd, spotlight, MCP (no statedirs walks, no writerate)",
+        )
+        ap.add_argument(
+            "--bulk-state", action="store_true", dest="bulk_state",
+            help="with full scan: also size Xcode/Docker/Caches/models "
+                 "(slow; default full is AI-tool state only)",
+        )
+
+    p = sub.add_parser(
+        "scan",
+        help="diagnose machine health (SMART, swap, state, processes, …)",
+        description="Run collectors, score findings, print a report. "
+                    "Default is a full forensic pass.",
+    )
+    p.add_argument("--json", action="store_true",
+                   help="print machine-readable JSON instead of tables")
+    p.add_argument("--no-history", action="store_true",
+                   help="do not append history.jsonl or metrics.db")
+    _add_tier_flags(p)
     p.set_defaults(func=cmd_scan)
 
-    p = sub.add_parser("watch", help="monitor + alert loop")
-    p.add_argument("--once", action="store_true")
-    p.add_argument("--interval", type=int, default=None,
-                   help="minutes between passes (default: config)")
-    p.add_argument("--micro", action="store_true",
-                   help="micro tier only (menu-bar safe: swap/disk/pressure/processes)")
-    p.add_argument("--fast", action="store_true",
-                   help="fast tier (no statedirs/writerate/forensics)")
-    p.add_argument("--bulk-state", action="store_true", dest="bulk_state",
-                   help="include Xcode/Docker/Caches/model dirs in statedirs (slow)")
+    p = sub.add_parser(
+        "watch",
+        help="run a scan and notify on new/escalated findings",
+        description="Same collectors as scan, plus Notification Center alerts "
+                    "(warn/critical). Use --once from LaunchAgent or cron.",
+    )
+    p.add_argument("--once", action="store_true",
+                   help="single pass then exit (for LaunchAgent / cron)")
+    p.add_argument("--interval", type=int, default=None, metavar="MIN",
+                   help="loop interval in minutes (default: config "
+                        "watch.interval_minutes)")
+    _add_tier_flags(p)
     p.set_defaults(func=cmd_watch)
 
-    p = sub.add_parser("clean", help="safe cleanup (dry-run by default)")
-    p.add_argument("targets", nargs="*",
-                   help="target ids (default: all 'safe' targets)")
+    p = sub.add_parser(
+        "clean",
+        help="list or reclaim regenerable caches (dry-run by default)",
+        description="Never deletes without --apply. Default moves to Trash.",
+    )
+    p.add_argument(
+        "targets", nargs="*", metavar="target",
+        help="target id(s); default = all 'safe' targets. "
+             "See COMMANDS.md (cursor-caches, xcode-deriveddata, …)",
+    )
     p.add_argument("--apply", action="store_true",
-                   help="actually clean (moves to Trash)")
+                   help="actually move items to Trash (or delete with --hard)")
     p.add_argument("--hard", action="store_true",
-                   help="delete permanently instead of Trash")
+                   help="permanent delete instead of Trash (requires --apply)")
     p.add_argument("--force", action="store_true",
-                   help="clean even if the owning app is running")
-    p.add_argument("--json", action="store_true")
+                   help="clean even if the owning app appears to be running")
+    p.add_argument("--json", action="store_true",
+                   help="print JSON results per target")
     p.set_defaults(func=cmd_clean)
 
-    p = sub.add_parser("optimize", help="fix churn at the source")
-    opt_sub = p.add_subparsers(dest="opt_command", required=True)
-    pi = opt_sub.add_parser("ignore", help="write/merge .cursorignore")
-    pi.add_argument("paths", nargs="*")
-    opt_sub.add_parser("headroom", help="free-space floor status + top consumers")
+    p = sub.add_parser(
+        "optimize",
+        help="reduce churn at the source (ignore rules, headroom, agents)",
+    )
+    opt_sub = p.add_subparsers(dest="opt_command", required=True,
+                               metavar="subcommand")
+    pi = opt_sub.add_parser(
+        "ignore",
+        help="write/merge .cursorignore rules to keep indexers out of junk",
+    )
+    pi.add_argument(
+        "paths", nargs="*", metavar="dir",
+        help="project roots (default: current directory)",
+    )
+    opt_sub.add_parser(
+        "headroom",
+        help="show free-space floor and largest monitored consumers",
+    )
     pia = opt_sub.add_parser(
         "install-agent",
-        help="install LaunchAgent(s); default is one hourly full agent "
-             "(watch.agent_mode=hourly). Dual stack requires "
-             "agent_mode=both or --mode both. Menubar users: run "
-             "uninstall-agent so only one continuous path runs",
+        help="install one scheduled LaunchAgent (default: hourly full scan)",
+        description=(
+            "Default mode is hourly: one agent running "
+            "`watch --once` every hour. Dual agents require an explicit "
+            "--mode both (discouraged). Prefer on-demand `scan` when possible."
+        ),
     )
     pia.add_argument(
         "--mode",
         choices=["hourly", "fast", "both", "none"],
         default=None,
-        help="override watch.agent_mode for this install "
-             "(hourly|fast|both|none; default hourly = one full agent)",
+        help="hourly (default, one full agent) | fast (one cheap agent) | "
+             "both (two agents, prints a warning) | none (install nothing)",
     )
     opt_sub.add_parser(
         "uninstall-agent",
-        help="remove both LaunchAgent labels if present "
-             "(com.wtfssd.watch and com.wtfssd.watch.fast)",
+        help="remove wtfssd LaunchAgents (hourly and/or fast labels)",
     )
     p.set_defaults(func=cmd_optimize)
 
-    p = sub.add_parser("history", help="trend table")
-    p.add_argument("--last", type=int, default=None)
-    p.add_argument("--json", action="store_true")
+    p = sub.add_parser(
+        "history",
+        help="show trends from past scans (TB written, free space, swap, …)",
+    )
+    p.add_argument("--last", type=int, default=None, metavar="N",
+                   help="show only the last N history rows")
+    p.add_argument("--json", action="store_true",
+                   help="print JSON history entries")
     p.set_defaults(func=cmd_history)
 
-    p = sub.add_parser("digest", help="one-look daily summary")
-    p.add_argument("--days", type=int, default=1)
-    p.add_argument("--json", action="store_true")
+    p = sub.add_parser(
+        "digest",
+        help="one-look summary of recent health and key deltas",
+    )
+    p.add_argument("--days", type=int, default=1, metavar="N",
+                   help="look-back window in days (default: 1)")
+    p.add_argument("--json", action="store_true",
+                   help="print JSON digest")
+    p.add_argument("--fast", action="store_true",
+                   help="use fast tier for the embedded scan")
+    p.add_argument("--micro", action="store_true",
+                   help="use micro tier for the embedded scan")
     p.set_defaults(func=cmd_digest)
 
-    p = sub.add_parser("config", help="show effective config")
-    p.add_argument("--show", action="store_true")
-    p.add_argument("--path", action="store_true")
+    p = sub.add_parser(
+        "config",
+        help="show effective config or its file path",
+    )
+    p.add_argument("--show", action="store_true",
+                   help="print full merged config as JSON (default action)")
+    p.add_argument("--path", action="store_true",
+                   help="print path to ~/.config/wtfssd/config.json")
     p.set_defaults(func=cmd_config)
 
     return parser
