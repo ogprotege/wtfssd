@@ -74,6 +74,39 @@ class TestReport(unittest.TestCase):
         self.assertIn("13.0", text)
         self.assertIn("2026-07-30", text)
         self.assertIn("TIMESTAMP", text.upper())
+        self.assertIn("TIER", text.upper())
+
+    def test_history_unmeasured_state_is_dash_not_zero(self):
+        rep = models.make_empty_report("2026-08-02T12:00:00", 64.0)
+        rep.scan_tier = "fast"
+        rep.statedirs = models.StateDirReport(
+            note="not collected (tier=fast)", total_bytes=0)
+        rep.smart = models.SmartReport(available=False, error="not collected")
+        rep.disk = models.DiskReport("/", 1000, 500, 412, 50, 50)
+        rep.swap = models.SwapReport(0, 0, 0)
+        text = report.render_history([rep])
+        self.assertIn("—", text)
+        self.assertNotRegex(text, r"\s0\.0\s*$")  # no trailing STATE 0.0
+        self.assertIn("fast", text)
+        self.assertIn("not measured", text.lower())
+
+    def test_history_full_only_hides_fast_rows(self):
+        full = models.make_empty_report("2026-08-02T12:00:00", 64.0)
+        full.scan_tier = "full"
+        full.statedirs = models.StateDirReport(total_bytes=20_000_000_000)
+        full.smart = models.SmartReport(available=True, percent_used=1,
+                                        tb_written=15.0)
+        full.disk = models.DiskReport("/", 1000, 500, 400, 50, 50)
+        full.swap = models.SwapReport(0, 0, 0)
+        fast = models.make_empty_report("2026-08-02T12:05:00", 64.0)
+        fast.scan_tier = "fast"
+        fast.statedirs = models.StateDirReport(note="not collected (tier=fast)")
+        text_all = report.render_history([full, fast])
+        self.assertIn("fast", text_all)
+        text_full = report.render_history([full, fast], full_only=True)
+        self.assertNotIn("\n2026-08-02T12:05:00", text_full)
+        self.assertIn("hid 1", text_full)
+        self.assertIn("20.0", text_full)
 
 
 class TestDomainTable(unittest.TestCase):
