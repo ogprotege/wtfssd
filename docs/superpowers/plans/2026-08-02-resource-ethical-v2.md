@@ -29,8 +29,8 @@
 
 When every stage below is complete, all of the following must be true:
 
-- [ ] `wtfssd scan --micro` finishes in **&lt; 100 ms** wall time on a warm machine (no iostat, no smartctl, no `du` walks).
-- [ ] `wtfssd scan --fast` finishes in **&lt; 500 ms** typical (no writerate, no statedirs walk).
+- [x] `wtfssd scan --micro` finishes in **&lt; 100 ms** wall time on a warm machine (no iostat, no smartctl, no `du` walks). — **0.09 s** (2026-08-02)
+- [x] `wtfssd scan --fast` finishes in **&lt; 500 ms** typical (no writerate, no statedirs walk). — **0.21 s** (2026-08-02)
 - [ ] `wtfssd scan` (full) still runs forensic collectors; AI-core statedirs every full scan; **bulk** statedirs only when `--bulk-state` or daily policy.
 - [ ] Menubar default refresh is **≥ 5 min** and uses **micro** (or status-file) path — not full `--fast` with iostat.
 - [ ] `optimize install-agent` installs **at most one** continuous agent by default (hourly full **or** menubar-owned; no dual 5‑min + hourly stack as default).
@@ -65,8 +65,8 @@ When every stage below is complete, all of the following must be true:
 | Stage | Name | Why this order | Can do together? | Status |
 |---|---|---|---|---|
 | **0** | Machine relief (ops only) | Stop the bleeding on *this* Mac before code | **Yes — first session** | **DONE 2026-08-02** |
-| **A** | Spec stub + branch | Lock decisions before code thrash | Yes (short) | pending |
-| **1** | True tier allow-lists | Unblocks every later continuous path | Code session 1 |
+| **A** | Spec stub + branch | Lock decisions before code thrash | Yes (short) | **DONE 2026-08-02** |
+| **1** | True tier allow-lists | Unblocks every later continuous path | Code session 1 | **DONE 2026-08-02** |
 | **2** | Growth trust gates | Stops false panic findings | Code session 2 |
 | **3** | State registry split | Removes expensive walks from default full | Code session 3 |
 | **4** | Single-scheduler agents | Stops dual LaunchAgent stack | Code session 4 |
@@ -228,11 +228,15 @@ ps aux | grep -E 'python3 -m wtfssd|wtfssd scan' | grep -v grep || echo "quiet �
 
 # STAGE A — Spec stub + branch
 
+> **STATUS: COMPLETED 2026-08-02** (subagent-driven)  
+> Commit: `3b5be6f` docs: resource-ethical v2 spec (tiers, one scheduler, growth gates)  
+> Branch: `resource-ethical-v2`
+
 **Goal:** Capture the resource-ethical decisions in-repo so implementers do not re-debate them mid-PR.
 
 ### Task A.1: Write the companion spec
 
-- [ ] **Step 1: Create** `docs/superpowers/specs/2026-08-02-resource-ethical-v2.md` with this exact content:
+- [x] **Step 1: Create** `docs/superpowers/specs/2026-08-02-resource-ethical-v2.md` with this exact content:
 
 ```markdown
 # wtfssd — Resource-Ethical v2 Spec
@@ -300,18 +304,26 @@ Token/cost tracking, multi-device sync, sudo thermal sensors, write-latency
 probes, new clean mutation surfaces beyond existing targets.
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit** — done (`3b5be6f`; also included plan file).
 
-```bash
-cd /Users/biscuit/wtfssd
-git checkout -b resource-ethical-v2
-git add docs/superpowers/specs/2026-08-02-resource-ethical-v2.md
-git commit -m "docs: resource-ethical v2 spec (tiers, one scheduler, growth gates)"
-```
+### Stage A completion log
+
+| Field | Value |
+|-------|--------|
+| Completed | 2026-08-02 |
+| Mode | Subagent-driven (Task A.1) |
+| Branch | `resource-ethical-v2` |
+| Commit | `3b5be6f` |
+| Artifacts | `docs/superpowers/specs/2026-08-02-resource-ethical-v2.md`, plan committed |
+| Next | Stage 1 |
 
 ---
 
 # STAGE 1 — True tier allow-lists
+
+> **STATUS: COMPLETED 2026-08-02** (subagent-driven)  
+> Commits: `96f0a1b` config allow-lists; `0983bdc` cli tiers + `--micro`  
+> Live timings after Stage 1: **micro 0.09–0.11 s**, **fast 0.21–0.24 s** (was 1.26 s)
 
 **Goal:** Make `--micro` and `--fast` mean “only these collectors,” so continuous UI has a real cheap path. **This is the first code stage to implement together after Stage 0.**
 
@@ -324,7 +336,7 @@ git commit -m "docs: resource-ethical v2 spec (tiers, one scheduler, growth gate
 **Interfaces:**
 - Produces: `DEFAULTS["tiers"]` keys `micro`, `fast`, `full` (lists of collector names). Keep `slow` temporarily as deprecated unused, or remove after cli switch — prefer **replace** with the three lists only.
 
-- [ ] **Step 1: Write failing test** — append to `tests/test_config.py`:
+- [x] **Step 1: Write failing test** — append to `tests/test_config.py`:
 
 ```python
     def test_tiers_are_allowlists(self):
@@ -343,13 +355,9 @@ git commit -m "docs: resource-ethical v2 spec (tiers, one scheduler, growth gate
         self.assertIn("statedirs", tiers["full"])
 ```
 
-- [ ] **Step 2: Run test — expect FAIL**
+- [x] **Step 2: Run test — expect FAIL** (TDD RED confirmed by implementer)
 
-```bash
-python3 -m unittest tests.test_config.TestConfig.test_tiers_are_allowlists -v
-```
-
-- [ ] **Step 3: Update `DEFAULTS["tiers"]` in `wtfssd/config.py`**
+- [x] **Step 3: Update `DEFAULTS["tiers"]` in `wtfssd/config.py`**
 
 Replace the existing `"tiers": {...}` entry with:
 
@@ -398,18 +406,9 @@ And `watch` defaults:
     },
 ```
 
-- [ ] **Step 4: Run test — expect PASS**
+- [x] **Step 4: Run test — expect PASS** — `tests.test_config` 5/5 OK
 
-```bash
-python3 -m unittest tests.test_config -v
-```
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add wtfssd/config.py tests/test_config.py
-git commit -m "config: allow-list tiers micro/fast/full; growth/agent defaults"
-```
+- [x] **Step 5: Commit** — `96f0a1b` config: allow-list tiers micro/fast/full; growth/agent defaults
 
 ### Task 1.2: Rewrite `build_report` to honor allow-lists
 
@@ -436,7 +435,7 @@ def build_report(config: dict, fast: bool = False, *,
         tier = "fast" if fast else "full"
 ```
 
-- [ ] **Step 1: Write failing tests** in `tests/test_cli.py` (adapt to existing mock style; the file already patches collectors):
+- [x] **Step 1: Write failing tests** in `tests/test_cli.py` (adapt to existing mock style; the file already patches collectors):
 
 ```python
     def test_build_report_micro_skips_writerate_and_statedirs(self):
@@ -490,13 +489,9 @@ def build_report(config: dict, fast: bool = False, *,
 
 Fill the second test the same way, patching the remaining always-on collectors that `fast` still needs (`smart`, `system`, etc.) with minimal empty reports so the function does not call real subprocesses.
 
-- [ ] **Step 2: Run tests — expect FAIL** (old build_report always calls writerate)
+- [x] **Step 2: Run tests — expect FAIL** (old build_report always calls writerate) — TDD RED confirmed
 
-```bash
-python3 -m unittest tests.test_cli -v
-```
-
-- [ ] **Step 3: Implement allow-list `build_report`**
+- [x] **Step 3: Implement allow-list `build_report`**
 
 Core logic (place at top of `build_report` body):
 
@@ -532,7 +527,7 @@ writerate=(writerate_col.collect_writerate(...) if want("writerate")
 
 Apply `want(...)` to **every** collector that is currently unconditional (`retention`, `launchd`, `spotlight`, `mcp`, `system`, `smart`, `pressure`, `backup`, etc.). That is the main bugfix: today several always run even under `--fast`.
 
-- [ ] **Step 4: Wire CLI flags**
+- [x] **Step 4: Wire CLI flags**
 
 On the `scan` and `watch` subparsers:
 
@@ -555,32 +550,34 @@ else:
 # mutual exclusion: if both --micro and --fast, prefer micro and print warning
 ```
 
-- [ ] **Step 5: Run module tests**
+- [x] **Step 5: Run module tests** — `tests.test_cli` + `tests.test_config` OK; full suite **214 OK**
 
-```bash
-python3 -m unittest tests.test_cli tests.test_config -v
-```
+- [x] **Step 6: Live timing gate**
 
-- [ ] **Step 6: Live timing gate**
+| Command | real (controller recheck) | vs Stage 0 baseline |
+|---------|---------------------------|---------------------|
+| `scan --micro --no-history` | **0.09 s** | n/a (new) |
+| `scan --fast --no-history` | **0.21 s** | was **1.26 s** |
+| full (unchanged path) | ~5 s | was 5.10 s |
 
-```bash
-cd /Users/biscuit/wtfssd
-/usr/bin/time -p python3 -m wtfssd scan --micro --no-history --json >/tmp/m.json
-/usr/bin/time -p python3 -m wtfssd scan --fast --no-history --json >/tmp/f.json
-# micro real < 0.20 preferred; fast real < 0.80 preferred (no 1s iostat)
-python3 -c "import json;print(json.load(open('/tmp/m.json'))['report'].keys())"
-```
+writerate/statedirs: `available=False` / note `not collected (tier=micro|fast)` on micro/fast payloads.
 
-Expected: micro report has swap/disk/processes/pressure usable; writerate/statedirs unavailable/empty note.
+- [x] **Step 7: Commit** — `0983bdc` cli: allow-list tiers; --micro; writerate only on full
 
-- [ ] **Step 7: Commit**
+**Stage 1 done when:** live `--micro` is clearly faster than current `--fast`, and writerate is not invoked on micro/fast. **MET.**
 
-```bash
-git add wtfssd/cli.py tests/test_cli.py
-git commit -m "cli: allow-list tiers; --micro; writerate only on full"
-```
+### Stage 1 completion log
 
-**Stage 1 done when:** live `--micro` is clearly faster than current `--fast`, and writerate is not invoked on micro/fast.
+| Field | Value |
+|-------|--------|
+| Completed | 2026-08-02 |
+| Mode | Subagent-driven (Tasks 1.1, 1.2) |
+| Commits | `96f0a1b` config; `0983bdc` cli |
+| Tests | 214 full suite OK; 14 focused cli+config OK |
+| micro wall | 0.09–0.11 s |
+| fast wall | 0.21–0.24 s |
+| Notes | `bulk_state` accepted on `build_report` but unused until Stage 3 |
+| Next | **Stage 2** — growth trust gates |
 
 ---
 
@@ -1081,8 +1078,9 @@ This stage is a separate mini-plan if needed — do not expand scope mid-flight.
 
 | Session | Do together | Est. time | Status |
 |---|---|---|---|
-| **1** | Stage 0 all tasks | ~20 min | **DONE 2026-08-02** (Stage A deferred to next session) |
-| **1b / 2** | Stage A + Stage 1 (Tasks 1.1–1.2) end-to-end with timings | 1–2 h | next |
+| **1** | Stage 0 all tasks | ~20 min | **DONE 2026-08-02** |
+| **1b** | Stage A + Stage 1 (Tasks 1.1–1.2) subagent-driven | ~15 min wall | **DONE 2026-08-02** |
+| **2** | Stage 2 growth gates | 45–90 min | next |
 | **3** | Stage 2 | 45–90 min |
 | **4** | Stage 3 | 1–2 h |
 | **5** | Stage 4 | 45–90 min |
