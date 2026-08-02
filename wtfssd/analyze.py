@@ -152,7 +152,12 @@ def analyze(report: HealthReport, history: list[HealthReport],
             f"Agentic/tooling state totals {total_gb:.0f} GB",
             "Unbounded local state with no retention policy.",
             "Run `wtfssd clean` to see safe reclaim targets."))
-    growth = state_growth_gb_per_day(history)
+    growth = state_growth_gb_per_day(
+        history,
+        min_samples=int(cfg_state.get("growth_min_samples", 4)),
+        min_span_days=float(cfg_state.get("growth_min_days", 3.0)),
+        max_gb_day=float(cfg_state.get("growth_max_gb_day", 50.0)),
+    )
     if growth is not None and growth >= cfg_state["growth_warn_gb_day"]:
         findings.append(_f("clean", "warn", "state.growth",
             f"State growing ~{growth:.1f} GB/day",

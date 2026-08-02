@@ -63,8 +63,14 @@ def gb_written_per_day(history: list[HealthReport]) -> float | None:
     return delta * 512_000 / 1e9 / days
 
 
-def state_growth_gb_per_day(history: list[HealthReport],
-                            window_days: float = 14.0) -> float | None:
+def state_growth_gb_per_day(
+    history: list[HealthReport],
+    window_days: float = 14.0,
+    *,
+    min_samples: int = 4,
+    min_span_days: float = 3.0,
+    max_gb_day: float | None = 50.0,
+) -> float | None:
     # skip rows where statedirs was not collected (e.g. scan --fast placeholders
     # with total_bytes=0) — a 0 at the window start would inflate the delta
     usable = [r for r in history if not r.statedirs.note]
@@ -79,10 +85,15 @@ def state_growth_gb_per_day(history: list[HealthReport],
             continue
         if ts >= cutoff:
             recent.append(r)
-    if len(recent) < 2:
+    if len(recent) < min_samples:
         return None
     days = _window_days(recent[0], recent[-1])
-    if not days:
+    if not days or days < min_span_days:
         return None
     delta = recent[-1].statedirs.total_bytes - recent[0].statedirs.total_bytes
-    return delta / 1e9 / days
+    rate = delta / 1e9 / days
+    # absurd rates are almost always baseline discontinuities (registry
+    # expansion, first full statedirs after --fast-only history, etc.)
+    if max_gb_day is not None and rate > max_gb_day:
+        return None
+    return rate
