@@ -33,7 +33,7 @@ When every stage below is complete, all of the following must be true:
 - [x] `wtfssd scan --fast` finishes in **&lt; 500 ms** typical (no writerate, no statedirs walk). — **0.21 s** (2026-08-02)
 - [x] `wtfssd scan` (full) still runs forensic collectors; AI-core statedirs every full scan; **bulk** statedirs only when `--bulk-state` or daily policy. — verified 2026-08-02
 - [ ] Menubar default refresh is **≥ 5 min** and uses **micro** (or status-file) path — not full `--fast` with iostat.
-- [ ] `optimize install-agent` installs **at most one** continuous agent by default (hourly full **or** menubar-owned; no dual 5‑min + hourly stack as default).
+- [x] `optimize install-agent` installs **at most one** continuous agent by default (hourly full **or** menubar-owned; no dual 5‑min + hourly stack as default). — verified 2026-08-02
 - [x] `state.growth` does not fire until **≥ 3 calendar days** of comparable full statedirs samples exist and rate is within a sanity cap. — verified live 2026-08-02
 - [ ] Full suite green: `python3 -m unittest discover -s tests -v`
 - [ ] README + AGENTS.md describe micro/fast/full and the “one scheduler” rule.
@@ -69,7 +69,7 @@ When every stage below is complete, all of the following must be true:
 | **1** | True tier allow-lists | Unblocks every later continuous path | Code session 1 | **DONE 2026-08-02** |
 | **2** | Growth trust gates | Stops false panic findings | Code session 2 | **DONE 2026-08-02** |
 | **3** | State registry split | Removes expensive walks from default full | Code session 3 | **DONE 2026-08-02** |
-| **4** | Single-scheduler agents | Stops dual LaunchAgent stack | Code session 4 |
+| **4** | Single-scheduler agents | Stops dual LaunchAgent stack | Code session 4 | **DONE 2026-08-02** |
 | **5** | Menubar micro path | Makes UI ethical by default | Code session 5 |
 | **6** | Docs + verification | Ship confidence | Final session |
 | **7** | Optional: status-file daemon | Only if micro-from-Swift is still not enough | Later / optional |
@@ -816,6 +816,11 @@ git commit -m "statedirs: AI-core by default; bulk paths behind --bulk-state"
 
 # STAGE 4 — Single-scheduler LaunchAgents
 
+> **STATUS: COMPLETED 2026-08-02** (subagent-driven)  
+> Commits: `9f80e5a` install_agents modes; `55befa4` docs/help  
+> Default: **one** hourly `com.wtfssd.watch`; dual only via `agent_mode=both` / `--mode both`  
+> Suite: **225 OK**
+
 **Goal:** `install-agent` no longer silently installs two pollers.
 
 ### Task 4.1: Agent mode in optimize + CLI
@@ -894,7 +899,18 @@ git commit -m "optimize: default single LaunchAgent (hourly); both is opt-in"
 
 - [ ] **Step 2: Commit** with Stage 6 if bundled with README.
 
-**Stage 4 done when:** a fresh `install-agent` creates one plist unless mode is both.
+**Stage 4 done when:** a fresh `install-agent` creates one plist unless mode is both. **MET.**
+
+### Stage 4 completion log
+
+| Field | Value |
+|-------|--------|
+| Completed | 2026-08-02 |
+| Mode | Subagent-driven (4.1 + 4.2) |
+| Commits | `9f80e5a`, `55befa4` |
+| Modes | hourly (default) · fast · both (warn) · none |
+| CLI | `wtfssd optimize install-agent [--mode …]` |
+| Next | **Stage 5** — menubar micro path |
 
 ---
 
