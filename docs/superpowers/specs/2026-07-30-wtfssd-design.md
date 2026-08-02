@@ -3,6 +3,10 @@
 Date: 2026-07-30
 Source article: `IDEA-SSD.txt` — "My MacBook Aged Three Years in Three Months of Vibe Coding"
 
+> **Later companions:** monitor expansion (`2026-07-30-monitor-expansion.md`)
+> and **resource-ethical v2** (`2026-08-02-resource-ethical-v2.md`). For tiers,
+> LaunchAgents, and product surface (CLI-only), resource-ethical v2 wins.
+
 ## 1. Purpose
 
 The article's thesis: agentic IDEs (Cursor, Claude Code, etc.) don't kill Apple Silicon SSDs —

@@ -52,54 +52,46 @@ wtfssd scan
 ## Quick start
 
 ```sh
-wtfssd scan              # full health report: SMART, storage, swap, ghost
-                         # processes, agentic-state sizes, findings, health score
+wtfssd scan              # full health report (forensic tier)
 wtfssd scan --json       # same, machine-readable
-wtfssd scan --fast       # fast tier only (skips state-dir sizing, APFS
-                         # snapshots, crashes, churn, fds, secrets,
-                         # logs, gitwatch); watch --fast likewise
+wtfssd scan --micro      # cheap vitals only (~0.1 s; no iostat / du)
+wtfssd scan --fast       # cheap counters; no statedirs walks, no writerate
 wtfssd clean             # dry-run: lists what *would* be cleaned, deletes nothing
 wtfssd clean cursor-caches --apply   # actually clean (moves to Trash)
 wtfssd optimize ignore ~/my-project  # write/merge .cursorignore churn rules
 wtfssd optimize headroom             # free-space floor status + top consumers
-wtfssd optimize install-agent        # background monitoring: two LaunchAgents,
-                                     # hourly full watch + 5-min fast-tier watch
+wtfssd optimize install-agent        # optional ONE hourly LaunchAgent
+                                     # (--mode hourly|fast|both|none; see COMMANDS.md)
 wtfssd watch --once      # single monitor pass + Notification Center alerts
 wtfssd history           # trend table built from past scans
-wtfssd digest            # one-look daily summary: domain statuses, key deltas
-                         # (TB written, swap, state, logs, backup age), findings
-wtfssd digest --json     # same, machine-readable (--days N widens the window)
+wtfssd digest            # one-look daily summary
 wtfssd config --show     # effective config (defaults + your overrides)
 ```
+
+**Full command reference (flags, clean targets, paths, naming):** see
+[COMMANDS.md](COMMANDS.md). Keep that file and this README consistent when
+flags or the package name change.
+
+### Product surface: CLI only
+
+`wtfssd` is a **command-line tool**. Supported workflows are on-demand
+commands plus an optional single LaunchAgent for scheduled
+`watch --once` + Notification Center. There is **no supported GUI or menu
+bar product**. Trees under `menubar/` and `contrib/swiftbar/` are
+**unmaintained archives** — do not install them for normal use.
+
+### Scan tiers (resource-ethical defaults)
+
+| Flag | Collectors (summary) | When to use |
+|------|----------------------|-------------|
+| `--micro` | swap, disk, processes, pressure | Scripted / frequent cheap checks |
+| `--fast` | micro + smart, system, backup, retention, launchd, spotlight, mcp | Occasional quick check |
+| *(default)* | full forensic: AI-core statedirs + **writerate** | On-demand diagnose |
+| `--bulk-state` | full + Xcode/Docker/Caches/models walks | Weekly headroom audit |
 
 Exit codes for `scan` / `watch --once` / `digest`: `0` no findings,
 `1` warnings only, `2` any critical finding, `3` internal error. `clean`
 exits `0`, or `3` on an unknown target.
-
-## Menu bar app
-
-`menubar/` is a native Swift menu bar app (SwiftUI popover, no
-dependencies) that puts the health score and grade in the menu bar —
-`SSD 92·A`, colored green/yellow/red by the worst current finding. The
-popover shows a hero score + grade, a VITALS strip, all ten domains with
-status markers, the current findings, and Full Scan / Digest / Quit
-actions (scan and digest open in Terminal). It refreshes every 60 seconds
-from `wtfssd scan --fast --json --no-history`; everything it does is
-read-only.
-
-```sh
-cd menubar && ./build.sh        # builds build/WTFSSDMonitor.app
-open build/WTFSSDMonitor.app
-```
-
-The app prefers an installed `wtfssd` command; from a source checkout it
-falls back to `python3 -m wtfssd` with the repo root as working directory
-(the repo path is baked into the app at build time, so rebuild if you move
-the checkout).
-
-A SwiftBar/xbar plugin alternative remains at
-`contrib/swiftbar/wtfssd.5m.py` — same data, rendered as a text dropdown
-inside SwiftBar instead of a native popover.
 
 ## Safety model
 
@@ -140,10 +132,12 @@ Other useful keys: `disk.warn_free_pct`, `procs.ghost_days`,
 `state.vscdb_warn_gb`, `smart.device`, `smart.external_devices` (extra drives
 to probe, e.g. `["/dev/disk2"]`), `alerts.cooldown_hours` /
 `alerts.cooldown_critical_hours` (per-severity re-notify intervals, 24 h / 4 h),
-`watch.interval_minutes` / `watch.fast_interval_minutes` (hourly full agent /
-5-minute fast-tier agent), `projects` (directories scanned for stale
-`node_modules`), `tiers.fast` / `tiers.slow` (which collectors `--fast` keeps
-and skips), `backup.enabled` / `backup.warn_hours` / `backup.crit_hours`
+`watch.interval_minutes` / `watch.fast_interval_minutes` / `watch.agent_mode`,
+`projects` (directories scanned for stale `node_modules`),
+`tiers.micro` / `tiers.fast` / `tiers.full` (collector **allow-lists** per
+tier — not a slow deny-list), `state.growth_min_samples` /
+`state.growth_min_days` / `state.growth_max_gb_day` (growth finding gates),
+`backup.enabled` / `backup.warn_hours` / `backup.crit_hours`
 (Time Machine freshness), `apfs.snapshot_warn_days`,
 `pressure.sustained_min`, `crashes.warn_weekly` / `crashes.apps`,
 `thermal.warn_below`, `uptime.warn_days`, `writerate.warn_mb_s`,
@@ -196,9 +190,10 @@ full merged picture.
   `alerts.cooldown_hours` (24 h), critical ones every
   `alerts.cooldown_critical_hours` (4 h). Info findings never notify.
 - `wtfssd/cleaners.py` — guarded, dry-run-first cleanup targets.
-- `wtfssd/optimize.py` — `.cursorignore` merging and the LaunchAgents
-  (hourly full watch plus a 5-minute fast-tier watcher).
-- `wtfssd/cli.py` — the `wtfssd` command.
+- `wtfssd/optimize.py` — `.cursorignore` merging and optional LaunchAgents
+  (default: one hourly full agent; dual stack is opt-in `--mode both`;
+  see [COMMANDS.md](COMMANDS.md)).
+- `wtfssd/cli.py` — the `wtfssd` command (`--micro` / `--fast` / full tiers).
 
 ## Tests
 

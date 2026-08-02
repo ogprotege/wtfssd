@@ -33,8 +33,11 @@ from .collectors import writerate as writerate_col
 from .collectors._run import run_cmd
 from .config import config_path, load_config
 from .models import (ApfsReport, BackupReport, ChurnReport, CrashReport,
-                     FdsReport, GitWatchReport, HealthReport, LogsReport,
-                     SecretsReport, StateDirReport, report_to_dict)
+                     FdsReport, GitWatchReport, HealthReport, LaunchdReport,
+                     LogsReport, MCPReport, PressureReport, ProcessReport,
+                     RetentionReport, SecretsReport, SmartReport,
+                     SpotlightReport, StateDirReport, SystemReport,
+                     WriteRateReport, report_to_dict)
 
 
 def host_ram_gb() -> float:
@@ -47,59 +50,97 @@ def host_ram_gb() -> float:
         return 0.0
 
 
-def build_report(config: dict, fast: bool = False) -> HealthReport:
-    slow = set(config.get("tiers", {}).get("slow", []))
+def _resolve_tier(args: argparse.Namespace) -> str:
+    """Map CLI flags to tier name. Prefer micro if both --micro and --fast."""
+    if getattr(args, "micro", False):
+        if getattr(args, "fast", False):
+            print("warning: both --micro and --fast set; using micro",
+                  file=sys.stderr)
+        return "micro"
+    if getattr(args, "fast", False):
+        return "fast"
+    return "full"
+
+
+def build_report(config: dict, fast: bool = False, *,
+                 tier: str | None = None,
+                 bulk_state: bool = False) -> HealthReport:
+    if tier is None:
+        tier = "fast" if fast else "full"
+    if tier not in ("micro", "fast", "full"):
+        tier = "full"
+    allowed = set(config.get("tiers", {}).get(tier, []))
 
     def want(name: str) -> bool:
-        return not (fast and name in slow)
+        return name in allowed
 
+    note = f"not collected (tier={tier})"
     crashes_cfg = config.get("crashes", {})
+
+    include_bulk = bulk_state or bool(
+        config.get("state", {}).get("include_bulk_default", False))
+
     return HealthReport(
         timestamp=datetime.now().isoformat(timespec="seconds"),
         host_ram_gb=host_ram_gb(),
-        smart=smart_col.collect_smart(config["smart"]["device"]),
-        swap=swap_col.collect_swap(),
-        disk=disk_col.collect_disk(config["disk"]["mount"]),
-        processes=proc_col.collect_processes(config["procs"]["ghost_days"]),
-        statedirs=(statedirs_col.collect_statedirs() if want("statedirs")
-                   else StateDirReport(note="not collected (--fast)")),
-        pressure=pressure_col.collect_pressure(),
-        system=system_col.collect_system(),
+        smart=(smart_col.collect_smart(config["smart"]["device"])
+               if want("smart")
+               else SmartReport(available=False, error=note)),
+        swap=(swap_col.collect_swap() if want("swap") else None),
+        disk=(disk_col.collect_disk(config["disk"]["mount"])
+              if want("disk") else None),
+        processes=(proc_col.collect_processes(config["procs"]["ghost_days"])
+                   if want("processes")
+                   else ProcessReport(note=note)),
+        statedirs=(statedirs_col.collect_statedirs(include_bulk=include_bulk)
+                   if want("statedirs")
+                   else StateDirReport(note=note)),
+        pressure=(pressure_col.collect_pressure() if want("pressure")
+                  else PressureReport(available=False, error=note)),
+        system=(system_col.collect_system() if want("system")
+                else SystemReport(available=False, error=note)),
         apfs=(apfs_col.collect_apfs(config["disk"]["mount"]) if want("apfs")
-              else ApfsReport(available=False, error="not collected (--fast)")),
+              else ApfsReport(available=False, error=note)),
         backup=(backup_col.collect_backup()
                 if want("backup") and config.get("backup", {}).get("enabled", True)
                 else BackupReport(
                     available=False,
-                    error=("not collected (--fast)" if not want("backup")
+                    error=(note if not want("backup")
                            else "not collected (backup.enabled=false)"))),
         crashes=(crashes_col.collect_crashes(crashes_cfg.get("apps", []))
                  if want("crashes")
-                 else CrashReport(available=False, error="not collected (--fast)")),
-        writerate=writerate_col.collect_writerate(
-            config.get("writerate", {}).get("device", "disk0")),
-        external_smart=[smartext_col.collect_smart_external(d)
-                        for d in config["smart"].get("external_devices", [])],
-        retention=retention_col.collect_retention(),
-        launchd=launchd_col.collect_launchd(),
-        spotlight=spotlight_col.collect_spotlight(),
-        mcp=mcp_col.collect_mcp(),
+                 else CrashReport(available=False, error=note)),
+        writerate=(writerate_col.collect_writerate(
+                       config.get("writerate", {}).get("device", "disk0"))
+                   if want("writerate")
+                   else WriteRateReport(available=False, error=note)),
+        external_smart=([smartext_col.collect_smart_external(d)
+                         for d in config["smart"].get("external_devices", [])]
+                        if want("smart") else []),
+        retention=(retention_col.collect_retention() if want("retention")
+                   else RetentionReport(available=False, error=note)),
+        launchd=(launchd_col.collect_launchd() if want("launchd")
+                 else LaunchdReport(available=False, error=note)),
+        spotlight=(spotlight_col.collect_spotlight() if want("spotlight")
+                   else SpotlightReport(available=False, error=note)),
+        mcp=(mcp_col.collect_mcp() if want("mcp")
+             else MCPReport(available=False, error=note)),
         churn=(churn_col.collect_churn() if want("churn")
-               else ChurnReport(available=False, error="not collected (--fast)")),
+               else ChurnReport(available=False, error=note)),
         fds=(fds_col.collect_fds() if want("fds")
-             else FdsReport(available=False, error="not collected (--fast)")),
+             else FdsReport(available=False, error=note)),
         secrets=(secrets_col.collect_secrets(
                     enabled=config.get("secrets", {}).get("enabled", False))
                  if want("secrets")
-                 else SecretsReport(available=False, error="not collected (--fast)")),
+                 else SecretsReport(available=False, error=note)),
         logs=(logs_col.collect_logs(
                 extra_dirs=tuple(config.get("logs", {}).get("extra_dirs", [])))
               if want("logs")
-              else LogsReport(available=False, error="not collected (--fast)")),
+              else LogsReport(available=False, error=note)),
         gitwatch=(gitwatch_col.collect_gitwatch(
                     config.get("git", {}).get("repos", []))
                   if want("gitwatch")
-                  else GitWatchReport(available=False, error="not collected (--fast)")),
+                  else GitWatchReport(available=False, error=note)),
     )
 
 
@@ -113,8 +154,12 @@ def _exit_code(findings: list) -> int:
 
 
 def _run_scan(config: dict, use_history: bool,
-              fast: bool = False) -> tuple[HealthReport, list, int]:
-    rep = build_report(config, fast=fast)
+              fast: bool = False, *,
+              tier: str | None = None,
+              bulk_state: bool = False) -> tuple[HealthReport, list, int]:
+    if tier is None:
+        tier = "fast" if fast else "full"
+    rep = build_report(config, tier=tier, bulk_state=bulk_state)
     if use_history:
         history.append_history(rep)
         metrics.record(rep)
@@ -128,8 +173,10 @@ def cmd_scan(args: argparse.Namespace) -> int:
     config, warn = load_config()
     if warn:
         print(f"warning: {warn}", file=sys.stderr)
+    tier = _resolve_tier(args)
+    bulk_state = bool(getattr(args, "bulk_state", False))
     rep, findings, code = _run_scan(config, use_history=not args.no_history,
-                                    fast=args.fast)
+                                    tier=tier, bulk_state=bulk_state)
     if args.json:
         print(report_mod.render_json(rep, findings))
     else:
@@ -141,9 +188,11 @@ def cmd_watch(args: argparse.Namespace) -> int:
     config, warn = load_config()
     if warn:
         print(f"warning: {warn}", file=sys.stderr)
+    tier = _resolve_tier(args)
+    bulk_state = bool(getattr(args, "bulk_state", False))
     if args.once:
-        rep, findings, code = _run_scan(config, use_history=True,
-                                        fast=args.fast)
+        rep, findings, code = _run_scan(config, use_history=True, tier=tier,
+                                        bulk_state=bulk_state)
         notified = alerts.alert(findings, config)
         for f in notified:
             print(f"notified: [{f.severity}] {f.title}")
@@ -154,7 +203,8 @@ def cmd_watch(args: argparse.Namespace) -> int:
     interval = args.interval or config["watch"]["interval_minutes"]
     print(f"wtfssd watching every {interval} min — Ctrl-C to stop")
     while True:
-        rep, findings, _ = _run_scan(config, use_history=True, fast=args.fast)
+        rep, findings, _ = _run_scan(config, use_history=True, tier=tier,
+                                     bulk_state=bulk_state)
         notified = alerts.alert(findings, config)
         print(f"[{rep.timestamp}] health "
               f"{analyze.health_score(findings)}/100 · "
@@ -222,7 +272,7 @@ def cmd_optimize(args: argparse.Namespace) -> int:
         print(f"free: {d.pct_free:.0f}% ({d.avail_gb:.0f} GB) — floor: 15–25%")
         if d.pct_free < 15:
             print("below the floor. Biggest monitored consumers:")
-            sd = statedirs_col.collect_statedirs()
+            sd = statedirs_col.collect_statedirs(include_bulk=True)
             for entry in sorted(sd.dirs, key=lambda e: e.size_bytes,
                                 reverse=True)[:5]:
                 if entry.exists:
@@ -231,16 +281,28 @@ def cmd_optimize(args: argparse.Namespace) -> int:
             print("see: wtfssd clean")
         return 0
     if args.opt_command == "install-agent":
-        path, loaded = optimize.install_agent()
-        print(f"wrote {path}")
-        print("loaded with launchctl" if loaded else
-              f"not loaded — run: launchctl bootstrap gui/$(id -u) {path}")
         config, _ = load_config()
-        interval = int(config.get("watch", {}).get("fast_interval_minutes", 5)) * 60
-        fpath, floaded = optimize.install_fast_agent(interval_seconds=interval)
-        print(f"wrote {fpath} (fast tier, every {interval // 60} min)")
-        print("loaded with launchctl" if floaded else
-              f"not loaded — run: launchctl bootstrap gui/$(id -u) {fpath}")
+        mode = getattr(args, "mode", None) or config.get(
+            "watch", {}).get("agent_mode", "hourly")
+        interval = int(config.get("watch", {}).get(
+            "interval_minutes", 60)) * 60
+        fast_interval = int(config.get("watch", {}).get(
+            "fast_interval_minutes", 15)) * 60
+        if mode == "none":
+            print("agent_mode=none: nothing installed; use on-demand "
+                  "`wtfssd scan` / `watch`")
+            return 0
+        if mode == "both":
+            print(optimize.WARN_BOTH)
+        results = optimize.install_agents(
+            mode,
+            interval_seconds=interval,
+            fast_interval_seconds=fast_interval,
+        )
+        for path, loaded in results:
+            print(f"wrote {path}")
+            print("loaded with launchctl" if loaded else
+                  f"not loaded — run: launchctl bootstrap gui/$(id -u) {path}")
         return 0
     if args.opt_command == "uninstall-agent":
         removed = optimize.uninstall_agent()
@@ -314,16 +376,24 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("scan", help="full health report")
     p.add_argument("--json", action="store_true")
     p.add_argument("--no-history", action="store_true")
+    p.add_argument("--micro", action="store_true",
+                   help="micro tier only (menu-bar safe: swap/disk/pressure/processes)")
     p.add_argument("--fast", action="store_true",
-                   help="fast tier only (skip slow collectors)")
+                   help="fast tier (no statedirs/writerate/forensics)")
+    p.add_argument("--bulk-state", action="store_true", dest="bulk_state",
+                   help="include Xcode/Docker/Caches/model dirs in statedirs (slow)")
     p.set_defaults(func=cmd_scan)
 
     p = sub.add_parser("watch", help="monitor + alert loop")
     p.add_argument("--once", action="store_true")
     p.add_argument("--interval", type=int, default=None,
                    help="minutes between passes (default: config)")
+    p.add_argument("--micro", action="store_true",
+                   help="micro tier only (menu-bar safe: swap/disk/pressure/processes)")
     p.add_argument("--fast", action="store_true",
-                   help="fast tier only (skip slow collectors)")
+                   help="fast tier (no statedirs/writerate/forensics)")
+    p.add_argument("--bulk-state", action="store_true", dest="bulk_state",
+                   help="include Xcode/Docker/Caches/model dirs in statedirs (slow)")
     p.set_defaults(func=cmd_watch)
 
     p = sub.add_parser("clean", help="safe cleanup (dry-run by default)")
@@ -343,8 +413,25 @@ def build_parser() -> argparse.ArgumentParser:
     pi = opt_sub.add_parser("ignore", help="write/merge .cursorignore")
     pi.add_argument("paths", nargs="*")
     opt_sub.add_parser("headroom", help="free-space floor status + top consumers")
-    opt_sub.add_parser("install-agent", help="install hourly LaunchAgent")
-    opt_sub.add_parser("uninstall-agent", help="remove LaunchAgent")
+    pia = opt_sub.add_parser(
+        "install-agent",
+        help="install LaunchAgent(s); default is one hourly full agent "
+             "(watch.agent_mode=hourly). Dual stack requires "
+             "agent_mode=both or --mode both. Menubar users: run "
+             "uninstall-agent so only one continuous path runs",
+    )
+    pia.add_argument(
+        "--mode",
+        choices=["hourly", "fast", "both", "none"],
+        default=None,
+        help="override watch.agent_mode for this install "
+             "(hourly|fast|both|none; default hourly = one full agent)",
+    )
+    opt_sub.add_parser(
+        "uninstall-agent",
+        help="remove both LaunchAgent labels if present "
+             "(com.wtfssd.watch and com.wtfssd.watch.fast)",
+    )
     p.set_defaults(func=cmd_optimize)
 
     p = sub.add_parser("history", help="trend table")

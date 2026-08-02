@@ -6,7 +6,8 @@ from pathlib import Path
 from ..models import StateDir, StateDirReport
 
 # (key, path relative to home, note, category)
-STATE_DIRS: tuple[tuple[str, str, str, str], ...] = (
+# AI-core: always sized on full scan when statedirs is in the tier.
+AI_STATE_DIRS: tuple[tuple[str, str, str, str], ...] = (
     ("cursor-app-support", "Library/Application Support/Cursor", "Cursor app state", "ai-state"),
     ("cursor-home", ".cursor", "Cursor config/extensions", "ai-state"),
     ("cursor-vscdb", "Library/Application Support/Cursor/User/globalStorage/state.vscdb",
@@ -19,6 +20,10 @@ STATE_DIRS: tuple[tuple[str, str, str, str], ...] = (
     ("windsurf-app-support", "Library/Application Support/Windsurf", "Windsurf state", "ai-state"),
     ("zed-app-support", "Library/Application Support/Zed", "Zed editor state", "ai-state"),
     ("codex-home", ".codex", "Codex CLI state", "ai-state"),
+)
+
+# Bulk: only when include_bulk=True (--bulk-state or state.include_bulk_default).
+BULK_STATE_DIRS: tuple[tuple[str, str, str, str], ...] = (
     ("jetbrains-app-support", "Library/Application Support/JetBrains", "JetBrains IDE state", "ide-cache"),
     ("ollama-models", ".ollama", "Ollama models", "models"),
     ("lmstudio-cache", ".cache/lm-studio", "LM Studio models/cache", "models"),
@@ -28,6 +33,9 @@ STATE_DIRS: tuple[tuple[str, str, str, str], ...] = (
     ("xcode-deriveddata", "Library/Developer/Xcode/DerivedData", "Xcode build products", "build-artifacts"),
     ("user-caches", "Library/Caches", "User caches", "user-caches"),
 )
+
+# Full registry for external references (cleaners docs, len checks, etc.).
+STATE_DIRS: tuple[tuple[str, str, str, str], ...] = AI_STATE_DIRS + BULK_STATE_DIRS
 
 
 def dir_size_bytes(path: Path) -> int:
@@ -59,10 +67,12 @@ def _vscdb_backups_size(global_storage: Path) -> int:
     return total
 
 
-def collect_statedirs(home: Path | None = None) -> StateDirReport:
+def collect_statedirs(home: Path | None = None, *,
+                      include_bulk: bool = False) -> StateDirReport:
     home = home or Path.home()
+    registry = AI_STATE_DIRS + BULK_STATE_DIRS if include_bulk else AI_STATE_DIRS
     dirs: list[StateDir] = []
-    for key, rel, note, category in STATE_DIRS:
+    for key, rel, note, category in registry:
         path = home / rel
         if key == "cursor-vscdb-backups":
             size = _vscdb_backups_size(path)

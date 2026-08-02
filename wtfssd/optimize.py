@@ -111,8 +111,9 @@ def uninstall_agent(label: str = "com.wtfssd.watch",
 def install_fast_agent(interval_seconds: int = 300,
                        label: str = "com.wtfssd.watch.fast",
                        launch_agents_dir: Path | None = None) -> tuple[Path, bool]:
-    """5-minute fast-tier watcher (watch --once --fast) alongside the hourly
-    full agent. Same launchctl probe semantics as install_agent."""
+    """Fast-tier watcher (watch --once --fast). Same launchctl probe
+    semantics as install_agent. Prefer install_agents(mode=...) for
+    resource-ethical installs (default is hourly-only)."""
     from .config import data_dir
     agents = launch_agents_dir or (Path.home() / "Library" / "LaunchAgents")
     agents.mkdir(parents=True, exist_ok=True)
@@ -129,3 +130,39 @@ def install_fast_agent(interval_seconds: int = 300,
         loaded = run_cmd(["launchctl", "print",
                           f"gui/{os.getuid()}/{label}"]) is not None
     return plist_path, loaded
+
+
+WARN_BOTH = (
+    "warning: agent_mode=both stacks two pollers; prefer hourly only "
+    "(CLI product — see resource-ethical v2 spec)"
+)
+
+
+def install_agents(
+    mode: str = "hourly",
+    *,
+    interval_seconds: int = 3600,
+    fast_interval_seconds: int = 900,
+    launch_agents_dir: Path | None = None,
+) -> list[tuple[Path, bool]]:
+    """mode: hourly | fast | both | none.
+    Returns list of (plist_path, loaded) for agents written. Empty if none.
+    Invalid mode is treated as hourly (no crash).
+    """
+    m = (mode or "hourly").strip().lower()
+    if m not in ("hourly", "fast", "both", "none"):
+        m = "hourly"
+    if m == "none":
+        return []
+    results: list[tuple[Path, bool]] = []
+    if m in ("hourly", "both"):
+        results.append(install_agent(
+            interval_seconds=interval_seconds,
+            launch_agents_dir=launch_agents_dir,
+        ))
+    if m in ("fast", "both"):
+        results.append(install_fast_agent(
+            interval_seconds=fast_interval_seconds,
+            launch_agents_dir=launch_agents_dir,
+        ))
+    return results
