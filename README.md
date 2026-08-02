@@ -1,132 +1,637 @@
 # wtfssd
 
-**Why is my Mac’s SSD busy / full / “dying”?**
+**“Why is my Mac’s SSD busy / full / ‘dying’?”**
 
-A **zero-dependency Python 3 CLI for macOS** that answers that question
-honestly: SMART wear from the drive itself, plus swap, free space, ghost IDE
-helpers, and agentic tool state — then alerts, cleans regenerable junk safely,
-and reduces indexer churn.
+A **zero-dependency Python 3 command-line tool for macOS** that answers that
+question with measurements, not vibes — then helps you clean up regenerable
+junk **safely** and stop the same mess from growing back.
 
-The usual story after heavy agentic coding is not a dead soldered SSD. It’s
-**unbounded local state and process lifecycle mess**. `wtfssd` measures that
-and gives you a safe way to mop up.
+- **No GUI.** Terminal only (on purpose — keep it light).
+- **No pip packages.** Standard library only.
+- **Deletes nothing unless you say so.** Cleanup is dry-run by default and
+  moves files to Trash, not into the void.
 
-**CLI only.** No supported menu bar app. Optional: one hourly LaunchAgent for
-notifications. Full recipes: **[COMMANDS.md](COMMANDS.md)**.
+If you can open Terminal and copy-paste a line, you can use this.
 
----
-
-## Requirements
-
-- macOS (Apple Silicon primary; Intel varies for SMART)
-- Python 3.10+
-- Optional: [smartmontools](https://www.smartmontools.org/)  
-  `brew install smartmontools` — without it, everything else still works
+Full flag encyclopedia and workflows: **[COMMANDS.md](COMMANDS.md)**.
 
 ---
 
-## Install
+## Table of contents
+
+1. [Why this exists](#1-why-this-exists)
+2. [What wtfssd does (and does not)](#2-what-wtfssd-does-and-does-not)
+3. [What you need](#3-what-you-need)
+4. [Install (caveman mode)](#4-install-caveman-mode)
+5. [Your first 10 minutes](#5-your-first-10-minutes)
+6. [How to read a scan report](#6-how-to-read-a-scan-report)
+7. [Cleaning without panic](#7-cleaning-without-panic)
+8. [Stop the mess coming back](#8-stop-the-mess-coming-back)
+9. [Optional: hourly check + notifications](#9-optional-hourly-check--notifications)
+10. [Scan “gears” (micro / fast / full / bulk)](#10-scan-gears-micro--fast--full--bulk)
+11. [Configuration for normal humans](#11-configuration-for-normal-humans)
+12. [Troubleshooting](#12-troubleshooting)
+13. [FAQ](#13-faq)
+14. [Safety rules (read once)](#14-safety-rules-read-once)
+15. [Where files live](#15-where-files-live)
+16. [Docs map & license](#16-docs-map--license)
+
+---
+
+## 1. Why this exists
+
+### The rumor
+
+After months of “vibe coding” (Cursor, Claude Code, dozens of agents, loops
+that run for hours), people online claimed **agentic IDEs were killing Mac
+SSDs in three months**. Scary SMART screenshots. Soldered storage = dead
+laptop. Panic.
+
+### What the article (and real machines) actually found
+
+The story that inspired this tool
+([`IDEA-SSD.txt`](IDEA-SSD.txt) — *“My MacBook Aged Three Years in Three
+Months of Vibe Coding”*) checked the drive’s **own** wear counters:
+
+| Claim | Reality on a heavy agentic machine |
+|-------|-------------------------------------|
+| SSD is “dying” | SMART often **PASSED**, ~**1–2%** life used |
+| Writes are huge | True — tens of TB written — but endurance is still years |
+| Machine feels old | True — heat, beachballs, full-disk warnings |
+
+The pain was not NAND wearing out. It was the **software environment**:
+
+1. **Swap pressure** — not enough RAM → kernel writes memory to the SSD
+   constantly (the single worst write source on many Macs).
+2. **Ghost processes** — close the window with the red button; helpers keep
+   living for days or weeks.
+3. **Unbounded local state** — chat databases, caches, agent transcripts,
+   indexer snapshots with **no retention policy**.
+4. **Low free space** — below ~15% free, macOS and the SSD controller both
+   struggle (swap, temps, snapshots, everything gets worse).
+5. **Non-AI hogs** — Xcode DerivedData, Docker, normal caches — often bigger
+   than the AI folders. Fairness matters.
+
+So: **the drive is fine; the house is a mess.**  
+`wtfssd` is the broom + the flashlight + the “don’t burn the house down”
+checklist.
+
+### Why a CLI, not another menu bar app
+
+A monitoring tool that **itself** polls the disk every minute and walks
+huge trees is part of the problem. This product is intentionally:
+
+- **On-demand** by default (`scan` when you care)
+- Optionally **one** quiet hourly LaunchAgent if you want notifications
+- **Not** a always-on desktop widget
+
+---
+
+## 2. What wtfssd does (and does not)
+
+### Does
+
+| Pillar | Meaning |
+|--------|---------|
+| **Monitor** | Read SMART, swap, free space, processes, AI state dirs, backup readiness, and more |
+| **Alert** | Optional Notification Center pings when something **new** or **worse** shows up |
+| **Clean** | Show reclaimable junk; with `--apply`, move it to **Trash** (with guards) |
+| **Optimize** | Write `.cursorignore` rules; show free-space floor; install a scheduled check |
+
+### Does not
+
+- Replace Time Machine or back up your life for you  
+- Kill processes for you (it **tells** you to quit apps properly)  
+- Guarantee the SSD “lasts forever”  
+- Run on Windows/Linux  
+- Offer a supported menu bar / GUI (folders `menubar/` and `contrib/swiftbar/`
+  are **dead experiments** — ignore them)
+
+---
+
+## 3. What you need
+
+| Need | Notes |
+|------|--------|
+| A Mac | Apple Silicon best; Intel works with patchier SMART |
+| Terminal | Applications → Utilities → Terminal |
+| Python 3.10+ | `python3 --version` |
+| Optional: smartmontools | `brew install smartmontools` for true SSD wear numbers |
+
+Without smartmontools, **everything else still works**; SMART just says
+“unavailable / install smartmontools.”
+
+---
+
+## 4. Install (caveman mode)
+
+### Option A — run from a folder (no install)
 
 ```sh
-git clone https://github.com/ogprotege/wtfssd.git && cd wtfssd
-python3 -m wtfssd scan          # run from source, no install
+cd ~
+git clone https://github.com/ogprotege/wtfssd.git
+cd wtfssd
+python3 -m wtfssd scan
+```
 
-# or:
+Every command below can be written as `python3 -m wtfssd …` instead of
+`wtfssd …` if you stay in this folder.
+
+### Option B — install a real command (pipx)
+
+```sh
+cd ~/wtfssd          # or wherever you cloned it
 pipx install .
 wtfssd scan
 ```
 
-Legacy command name `ssdwtf` still works after install (same entry point).
+If `pipx` is missing: `brew install pipx && pipx ensurepath`, then open a
+**new** Terminal window.
 
----
+After install, the old name `ssdwtf` still works as an alias. Prefer **`wtfssd`**.
 
-## Quick start
+### Option C — already cloned, update after git pull
 
 ```sh
-wtfssd scan                          # full health report
-wtfssd clean                         # dry-run: what could be reclaimed
-wtfssd clean cursor-caches --apply   # actually clean (→ Trash)
-wtfssd optimize ignore ~/my-project  # .cursorignore to cut indexer churn
-wtfssd optimize install-agent        # optional: one hourly notify scan
+cd ~/wtfssd
+git pull
+pipx install . --force    # only if you used pipx before
 ```
 
-| Need | Command |
-|------|---------|
-| Cheap vitals (~0.1s) | `wtfssd scan --micro` |
-| Medium check | `wtfssd scan --fast` |
-| Full diagnose | `wtfssd scan` |
-| Include Xcode/Docker/Caches sizes | `wtfssd scan --bulk-state` |
-| Trends | `wtfssd history` |
-| Daily summary | `wtfssd digest` |
-| Config | `wtfssd config --show` |
+---
 
-Exit codes (`scan` / `watch --once` / `digest`): **0** ok · **1** warnings ·
-**2** critical · **3** error.
+## 5. Your first 10 minutes
 
-→ **All workflows, clean targets, agent modes, paths:** [COMMANDS.md](COMMANDS.md)
+Do these **in order**. Copy-paste is fine.
+
+### Step 1 — Look (read-only)
+
+```sh
+wtfssd scan
+```
+
+Wait a few seconds (full scan often ~2–6 seconds). You get:
+
+- Drive / storage / memory / process / state sections  
+- A list of **findings** (WARN / CRITICAL / INFO)  
+- A **health score** 0–100 and letter grade  
+
+**Nothing was deleted.** Scan only reads the system (and may append a history
+row under `~/.local/share/wtfssd/` unless you pass `--no-history`).
+
+### Step 2 — See what cleanup *would* do (still safe)
+
+```sh
+wtfssd clean
+```
+
+This is a **dry-run**. It prints sizes and “would-trash” lines.  
+Your disk is unchanged.
+
+### Step 3 — Clean one safe thing (optional)
+
+Quit Cursor first if you can (less drama).
+
+```sh
+wtfssd clean cursor-caches --apply
+```
+
+That **moves** cache files to **Trash**. You can restore from Trash if you
+panic. Empty Trash yourself later when you trust it.
+
+### Step 4 — Cut indexer churn in a project (optional)
+
+```sh
+wtfssd optimize ignore ~/path/to/your/project
+```
+
+Adds sensible ignore rules (e.g. `node_modules/`, build dirs) under a
+`# wtfssd` marker. Does not delete anything.
+
+### Step 5 — Optional hourly babysitter
+
+```sh
+wtfssd optimize install-agent
+```
+
+Installs **one** LaunchAgent that runs a full check about once an hour and
+can notify you. Uninstall anytime:
+
+```sh
+wtfssd optimize uninstall-agent
+```
 
 ---
 
-## Safety
+## 6. How to read a scan report
 
-- **`clean` is dry-run by default** — nothing moves until `--apply`
-- **Trash, not `rm`** (unless you pass `--hard --apply`)
-- **App guards** — skips targets if Cursor/Claude/etc. appear running
-- **Backup-first** for the live Cursor chat database
-- **Denylist** — never touches home root, Documents/Desktop/media folders, or paths outside `$HOME`
-- Monitoring commands only write history/metrics/alerts under `~/.local/share/wtfssd`
+You do **not** need to understand every line. Use this decoder.
+
+### Health score / grade
+
+| Grade | Rough meaning |
+|-------|----------------|
+| A–B | Mostly fine; maybe info/noise |
+| C | Real warnings — worth acting this week |
+| D–F | Critical issues — free space / backup / drive flags |
+
+Score is a simple penalty system (critical hurts more than warn). It’s a
+**compass**, not a medical certificate.
+
+### Domain strip (drive, backup, headroom, memory, …)
+
+Each domain is `ok` / `warn` / `critical` / `unknown`:
+
+| Domain | Think of it as |
+|--------|----------------|
+| **drive** | Is the SSD itself reporting wear/errors? |
+| **backup** | Is Time Machine configured and recent? |
+| **headroom** | Do you have enough free space? |
+| **memory** | Swap / pressure — is the machine thrashing? |
+| **processes** | Too many IDE helpers / ghosts / leaks? |
+| **state** | AI tool folders huge or growing fast? |
+| **stability** | Crashes, throttle, uptime, weird launchd? |
+| **telemetry** | Write rate, battery health notes |
+| **privacy** | Retention missing; secrets scan (if enabled) |
+| **work** | Dirty git repos you configured |
+
+**Important:** `unknown` means “we couldn’t measure,” **not** “everything is fine.”
+
+### Findings language
+
+```text
+[WARN] 54 IDE-related processes running
+    Agentic IDEs spawn helper trees that outlive their windows.
+    → Fully quit unused IDEs; check Activity Monitor.
+```
+
+- **Title** — what fired  
+- **Detail** — why it matters  
+- **Arrow** — what to do next  
+
+### Common findings and plain-English fixes
+
+| Finding vibe | Likely meaning | What to do |
+|--------------|----------------|------------|
+| SSD wear low %, PASSED | Drive is fine | Stop doomscrolling; check monthly with `history` |
+| Swap high | RAM overflow hitting disk | Quit heavy apps; reboot; fewer parallel agents |
+| Many IDE processes / ghosts | Helpers outlived windows | **Cmd+Q** the app; Activity Monitor → force quit leftovers |
+| State totals multi‑GB | Chat/state folders huge | `wtfssd clean` dry-run; quit app; clean caches/backups |
+| Free space low | Headroom floor breached | Clean + empty Trash; aim for ~15–25% free |
+| Backup destination missing | Time Machine disk unplugged | Plug it in or fix TM settings |
+| Retention missing | Tools don’t auto-expire chat/state | Set cleanup days in Claude/Cursor settings if available |
+
+### SMART in one sentence
+
+**Percentage Used** and **health PASSED** are the honest wear story.  
+Huge “TB written” without high % used is **not** an emergency by itself.
 
 ---
 
-## Configuration
+## 7. Cleaning without panic
 
-Optional file: `~/.config/wtfssd/config.json` (deep-merged over defaults).
+### Golden rules
+
+1. **Always dry-run first:** `wtfssd clean` or `wtfssd clean some-target`  
+2. **Quit the app** that owns the data (Cursor, Claude, …) when possible  
+3. **`--apply` moves to Trash** — recoverable until you empty Trash  
+4. **`--hard --apply`** permanently deletes — only if you mean it  
+5. Never clean when you don’t understand the target name  
+
+### Safe-ish everyday targets
+
+```sh
+wtfssd clean cursor-caches --apply
+wtfssd clean claude-caches --apply
+wtfssd clean xcode-deriveddata --apply    # rebuild cost: time, not your code
+wtfssd clean user-caches --apply          # large Library/Caches dirs
+```
+
+### Higher risk
+
+```sh
+# Chat DB backups only (not the live DB)
+wtfssd clean cursor-vscdb-backups --apply
+
+# LIVE chat database — local history GONE. Quit Cursor. Tool backups first.
+wtfssd clean cursor-vscdb --apply
+```
+
+### If a clean is skipped
+
+```text
+SKIPPED: Cursor appears to be running
+```
+
+Quit the app (Cmd+Q), or override with `--force` only if you know why.
+
+### List of target ids
+
+See [COMMANDS.md — clean](COMMANDS.md#clean--reclaim-space) for the full table
+(`cursor-caches`, `xcode-deriveddata`, `trash`, …).
+
+---
+
+## 8. Stop the mess coming back
+
+### Ignore rules (indexer / agent file sprawl)
+
+```sh
+wtfssd optimize ignore ~/code/my-app
+```
+
+Merges a block of rules (`node_modules/`, `dist/`, logs, …) into
+`.cursorignore` without wiping your existing lines.
+
+### Headroom check
+
+```sh
+wtfssd optimize headroom
+```
+
+Shows free % vs the 15–25% floor and, if you’re low, the biggest monitored
+consumers (includes bulk trees like caches so the ranking is honest).
+
+### Habits that beat any tool
+
+1. **Cmd+Q** IDEs when done — don’t only click the red window button  
+2. Keep **≥15% free** on the data volume  
+3. Reboot occasionally if swap has been high for days  
+4. Don’t run 40 agents on an 8 GB / 256 GB base Mac and expect silence  
+
+---
+
+## 9. Optional: hourly check + notifications
+
+```sh
+wtfssd optimize install-agent          # one hourly full check
+wtfssd optimize uninstall-agent        # remove it
+```
+
+What you get:
+
+- LaunchAgent label: `com.wtfssd.watch`  
+- Runs roughly: `wtfssd watch --once` each hour  
+- Can pop **Notification Center** when a finding is new or gets worse  
+
+What you should **not** do:
+
+```sh
+wtfssd optimize install-agent --mode both   # two pollers — avoid
+```
+
+Prefer **on-demand `scan`** if you hate background anything.
+
+---
+
+## 10. Scan “gears” (micro / fast / full / bulk)
+
+Think of a car gearbox. Use the lowest gear that answers your question.
+
+| Gear | Flag | When to use | Rough cost |
+|------|------|-------------|------------|
+| 1 | `--micro` | “Is swap/disk/pressure nuts right now?” | ~0.1 s |
+| 2 | `--fast` | Quick SMART + backup + process vibe | under ~1 s typical |
+| 3 | *(default)* | Full diagnose including AI folder sizes | a few seconds |
+| 4 | `--bulk-state` | Also size Xcode/Docker/Caches/models | slower |
+
+```sh
+wtfssd scan --micro
+wtfssd scan --fast
+wtfssd scan
+wtfssd scan --bulk-state
+```
+
+**Full default does not walk all of `Library/Caches`.**  
+That heavy walk is **`--bulk-state`** (or `optimize headroom`, which always
+includes bulk for ranking).
+
+---
+
+## 11. Configuration for normal humans
+
+Optional file:
+
+```text
+~/.config/wtfssd/config.json
+```
+
+Only put keys you care about. Everything else uses built-in defaults.
+
+### Example
 
 ```json
 {
-  "swap": { "warn_gb": 4.0 },
+  "swap": { "warn_gb": 4.0, "crit_gb": 12.0 },
+  "disk": { "warn_free_pct": 15.0, "crit_free_pct": 10.0 },
   "projects": ["/Users/you/code"],
-  "watch": { "agent_mode": "hourly" }
+  "watch": { "interval_minutes": 60, "agent_mode": "hourly" },
+  "git": { "repos": ["/Users/you/code/my-app"] },
+  "secrets": { "enabled": false }
 }
 ```
 
-See `wtfssd config --show` and [COMMANDS.md](COMMANDS.md) for keys people
-actually change.
+### See what the tool is actually using
+
+```sh
+wtfssd config --show
+wtfssd config --path
+```
+
+More keys: [COMMANDS.md — Config](COMMANDS.md#configuration-people-actually-change).
 
 ---
 
-## What it looks at (short)
+## 12. Troubleshooting
 
-| Area | Examples |
-|------|----------|
-| Drive | SMART % used, media errors, TB written |
-| Memory | Swap, pressure, long-lived IDE helpers |
-| Storage | Free %, AI tool state dirs, optional bulk (Xcode/Docker/…) |
-| Stability | Crashes, thermal throttle, uptime, backup readiness |
-| Optional | Secrets-at-rest paths (opt-in), git dirtiness on configured repos |
+### “command not found: wtfssd”
 
-Collectors are **read-only** (except your explicit `clean` / `optimize` actions).
+```sh
+# Either use module form from the repo:
+cd /path/to/wtfssd
+python3 -m wtfssd scan
 
----
+# Or install:
+pipx install /path/to/wtfssd
+# then open a NEW terminal
+```
 
-## Tests
+### “SMART unavailable” / missing smartctl
+
+```sh
+brew install smartmontools
+wtfssd scan
+```
+
+Still nothing? Some Macs/permissions limit SMART; the rest of the report is
+still useful.
+
+### Scan feels slow
+
+| You ran | Expected |
+|---------|----------|
+| `scan --micro` | Should feel instant |
+| `scan --fast` | Usually under a second |
+| `scan` | A few seconds (AI folder sizing) |
+| `scan --bulk-state` | Longer if DerivedData/Caches are huge |
+
+If **micro** is slow, something is wrong with the machine or Python env — not
+normal.
+
+### Findings look scary but score is OK
+
+Info and some warns are educational. Read the recommendation line.  
+**Critical** on backup/drive/headroom deserves action the same day.
+
+### `state.growth` used to scream nonsense numbers
+
+Growth warnings need **several full scans over days** and a sanity cap.
+A brand-new install should **not** claim “29 GB/day.” If it does after a
+fresh install, open an issue — that’s a bug.
+
+### Clean does nothing / “nothing found”
+
+Target paths may not exist on your machine (e.g. no Windsurf). That’s fine.
+
+### Clean skipped because app is running
+
+```sh
+# Quit the app from the menu bar (Cmd+Q), then:
+wtfssd clean cursor-caches --apply
+
+# Nuclear override (only if you understand risk):
+wtfssd clean cursor-caches --apply --force
+```
+
+### I cleaned and free space barely moved
+
+Common causes:
+
+1. Files still in **Trash** — empty Trash  
+2. **APFS snapshots** holding blocks — Time Machine local snapshots  
+3. You cleaned a small target; the hog is Xcode/Docker — try  
+   `wtfssd scan --bulk-state` and `wtfssd optimize headroom`  
+4. Active swap / other apps writing while you look  
+
+### Notifications never appear
+
+- `watch --once` must actually run (agent installed and loaded)  
+- Findings may be **info** only (never notify)  
+- Or still inside **cooldown** (same warn within 24h)  
+- macOS may be suppressing alerts for Terminal/osascript — check  
+  System Settings → Notifications  
+
+Check agent:
+
+```sh
+launchctl list | grep wtfssd
+ls ~/Library/LaunchAgents/com.wtfssd*
+```
+
+Reload:
+
+```sh
+wtfssd optimize uninstall-agent
+wtfssd optimize install-agent
+```
+
+### “Permission denied” or odd OSError lines
+
+Some system paths are unreadable without admin. Collectors are built to
+**degrade** (mark unavailable), not crash. Report the section that failed.
+
+### I used to have a menu bar app
+
+It’s **unmaintained**. Don’t install `menubar/`. Use Terminal + optional
+LaunchAgent. See `menubar/UNMAINTAINED.md`.
+
+### Python errors / “internal error”
+
+```sh
+python3 --version    # need 3.10+
+cd /path/to/wtfssd
+python3 -m wtfssd scan
+```
+
+If it still blows up, copy the full error. Run tests if you’re developing:
 
 ```sh
 python3 -m unittest discover -s tests -v
 ```
 
-No network, no root, no third-party packages.
+---
+
+## 13. FAQ
+
+**Q: Will this wear out my SSD by scanning?**  
+A: A full scan a few times a day is noise compared to agentic IDEs. That’s why
+we avoided an always-on heavy menu bar. Hourly agent is optional.
+
+**Q: Do I need to understand SMART?**  
+A: Only two ideas: **PASSED** + low **% used** → drive is fine. High % used
+or media errors → back up and investigate hardware.
+
+**Q: Is free space “15%” a hard law?**  
+A: It’s an operational floor from real Mac behavior, not physics. Below ~10%
+things get ugly fast.
+
+**Q: Can I run this every minute in a loop?**  
+A: You *can* (`watch --interval 1 --micro`), but don’t. Use on-demand or
+hourly full.
+
+**Q: Does clean remove my projects / source code?**  
+A: Not by design. Targets are caches, derived data, tool state. Protected
+paths (Documents, Desktop, …) and paths outside your home are denied.
+
+**Q: Secrets scanner?**  
+A: Off by default. Enable only if you want path/line/rule hits in agent state
+files — it never prints the secret values.
+
+**Q: Where is the long command list?**  
+A: **[COMMANDS.md](COMMANDS.md)**.
 
 ---
 
-## License
+## 14. Safety rules (read once)
+
+1. `clean` without `--apply` **cannot** delete.  
+2. Prefer Trash over `--hard`.  
+3. Quit owning apps before cleaning their state.  
+4. `cursor-vscdb` deletes **local chat history** — intentional high risk.  
+5. Keep Time Machine (or other backups) for real data — this tool is not a backup.  
+6. Read the finding recommendation before doing something heroic.
+
+---
+
+## 15. Where files live
+
+| Path | What |
+|------|------|
+| `~/.config/wtfssd/config.json` | Your settings overrides |
+| `~/.local/share/wtfssd/history.jsonl` | Past scan snapshots |
+| `~/.local/share/wtfssd/metrics.db` | Metric time series |
+| `~/.local/share/wtfssd/alert_state.json` | Notification cooldowns |
+| `~/.local/share/wtfssd/backups/` | Copies of high-risk files before clean |
+| `~/Library/LaunchAgents/com.wtfssd.watch.plist` | Optional hourly agent |
+
+---
+
+## 16. Docs map & license
+
+| Document | Who it’s for |
+|----------|----------------|
+| **This README** | Humans: why, first hour, how to read results, troubleshooting |
+| **[COMMANDS.md](COMMANDS.md)** | Humans: every workflow + every flag + clean targets |
+| **[AGENTS.md](AGENTS.md)** | AI/coding agents working **in** this repository |
+| `docs/superpowers/specs/` | Design specs (resource-ethical v2 = current product rules) |
+| `IDEA-SSD.txt` | Source article thesis |
+
+### Tests (developers)
+
+```sh
+python3 -m unittest discover -s tests -v
+```
+
+### License
 
 MIT
-
-## Docs map
-
-| Doc | Audience |
-|-----|----------|
-| [COMMANDS.md](COMMANDS.md) | **You at the keyboard** (workflows + flags) |
-| [AGENTS.md](AGENTS.md) | Coding agents working in this repo |
-| [docs/superpowers/specs/](docs/superpowers/specs/) | Design specs (resource-ethical v2 is current for tiers/agents) |
