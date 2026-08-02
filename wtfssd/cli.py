@@ -272,7 +272,7 @@ def cmd_optimize(args: argparse.Namespace) -> int:
         print(f"free: {d.pct_free:.0f}% ({d.avail_gb:.0f} GB) — floor: 15–25%")
         if d.pct_free < 15:
             print("below the floor. Biggest monitored consumers:")
-            sd = statedirs_col.collect_statedirs()
+            sd = statedirs_col.collect_statedirs(include_bulk=True)
             for entry in sorted(sd.dirs, key=lambda e: e.size_bytes,
                                 reverse=True)[:5]:
                 if entry.exists:
