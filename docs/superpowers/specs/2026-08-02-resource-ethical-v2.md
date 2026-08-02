@@ -69,7 +69,10 @@ Do not stack multiple continuous pollers.
 
 ## Thoroughness claim
 
-Default `scan` (full tier) is thorough for **agentic/IDE drowning** signals
-without root. Maximum in-product pass is `scan --bulk-state` plus optional
-config (`secrets`, `git.repos`, `smart.external_devices`). It is **not** a
-claim of “every macOS metric possible.”
+Default `scan` (full tier) runs **every collector the product ships** that
+works without root (`tiers.full` in config). That is thorough for
+**agentic/IDE drowning** signals without a password. Maximum in-product pass
+is `scan --bulk-state` plus optional config (`secrets`, `git.repos`,
+`smart.external_devices`). It is **not** a claim of “every macOS metric
+possible,” and it is **not** incomplete for lack of sudo — root-only extras
+are non-goals, not deferred work.

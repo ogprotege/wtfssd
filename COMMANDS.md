@@ -163,14 +163,20 @@ On a healthy machine you should see roughly:
 
 ## How thorough is full scan? (no sudo)
 
-**Product rule: never `sudo`.** Scans never prompt for a password.
+**Product rule: never `sudo`.** Scans never prompt for a password. The code
+never invokes `sudo` (collectors go through `run_cmd` only).
+
+Full scan is **complete for every collector we ship that works without root**.
+It is not “partial because we forgot sudo” — root-only extras are
+deliberately out of product.
 
 ### Full tier collectors (default `wtfssd scan`)
 
 `swap`, `disk`, `processes`, `pressure`, `smart`, `system`, `backup`,
 `retention`, `launchd`, `spotlight`, `mcp`, `statedirs` (**AI-core only**),
 `apfs`, `crashes`, `churn`, `fds`, `secrets` (if enabled), `logs`,
-`gitwatch` (if `git.repos` set), `writerate`.
+`gitwatch` (if `git.repos` set), `writerate`, plus **external SMART** when
+`smart.external_devices` is set.
 
 ### Max in-product thoroughness
 

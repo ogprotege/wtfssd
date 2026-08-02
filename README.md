@@ -418,13 +418,16 @@ includes bulk for ranking).
 software drowning my Mac?” — **without** asking for your password.
 
 It is **not** a root-level forensic suite of the entire operating system.
-That is intentional.
+That is intentional. “Not everything possible on a Mac” is **not** the same as
+“half-finished product.” Full tier already runs **every collector in the
+package** that works without root.
 
 | Question | Answer |
 |----------|--------|
 | Does full scan check “everything on the Mac”? | **No.** |
-| Does it check everything in scope for vibe-coding SSD panic? | **Yes, for non-root signals.** |
-| Does it use `sudo`? | **Never.** No password prompts. Ever. |
+| Does it check everything in scope for vibe-coding SSD panic? | **Yes — all non-root signals we ship.** |
+| Does it use `sudo`? | **Never.** No password prompts. Code path never calls `sudo`. |
+| Would sudo make the *product* more complete? | **No.** It would only add root-only extras listed below. |
 | Max thoroughness command | `wtfssd scan --bulk-state` + optional config (below) |
 
 ### Why no sudo (on purpose)
