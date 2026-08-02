@@ -28,16 +28,20 @@ four pillars:
   floor tracking, launchd agent for scheduled monitoring, monthly SMART habit.
 
 Non-goals (v1): GUI/menu-bar app, Docker cleanup, remote/fleet monitoring, Windows/Linux support,
-deleting anything under user project folders other than explicitly stale `node_modules`.
+deleting anything under user project folders other than explicitly stale `node_modules`,
+**any sudo/root requirement** (see resource-ethical v2 thoroughness claim: full scan is
+thorough for agentic/IDE drowning without root; root-only signals stay out of product).
 
 ## 2. Technology & Constraints
 
 - Python 3, **standard library only** (verified: Python 3.14.6 on macOS 26.6 arm64).
   No pip installs, no venv required.
-- External commands used (all read-only): `smartctl` (optional; present on this machine and
-  works without sudo), `sysctl`, `df`, `ps`, `du`, `osascript` (notifications).
+- External commands used (all read-only, **never via sudo**): `smartctl` (optional; on Apple
+  Silicon the internal NVMe usually works without root), `sysctl`, `df`, `ps`, `du`,
+  `osascript` (notifications), and the expanded collector set (see resource-ethical v2 /
+  monitor-expansion).
 - Every external dependency degrades gracefully: missing `smartctl` produces a "install
-  smartmontools" note, not a crash.
+  smartmontools" note, not a crash. Never elevate privileges to recover a failed collector.
 - Runnable as `python3 -m wtfssd` from the repo, or installed via `pipx/pip install .`
   exposing a `wtfssd` console script.
 

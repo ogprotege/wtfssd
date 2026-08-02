@@ -36,17 +36,35 @@ Four pillars:
   launchd LaunchAgent for scheduled monitoring
 
 Non-goals: GUI / menu bar product, Docker cleanup, remote/fleet monitoring,
-Windows/Linux. (`menubar/` and `contrib/swiftbar/` may exist as unmaintained
-archives only.)
+Windows/Linux, **any `sudo` / root requirement**. (`menubar/` and
+`contrib/swiftbar/` may exist as unmaintained archives only.)
+
+## Scan thoroughness (contractual)
+
+- **Never sudo.** `run_cmd` never prefixes `sudo`; the package must not
+  prompt for a password. Root-only tools (`powermetrics`, `/var/vm` listing,
+  continuous `fs_usage`) stay **out of product** — document the gap, do not
+  half-wrap them.
+- **Full `scan` is thorough for agentic/IDE drowning**, not whole-OS forensics.
+  Default full tier runs every collector that works without root (see
+  `config.DEFAULTS["tiers"]["full"]`). Max in-product pass:
+  `scan --bulk-state` (+ optional `secrets`, `git.repos`,
+  `smart.external_devices`).
+- **Tier ladder:** `micro` (swap/disk/procs/pressure) → `fast` (+ SMART and
+  cheap signals) → `full` (+ statedirs, apfs, crashes, churn, fds, logs,
+  writerate, …) → `full` + `--bulk-state` (heavy non-AI trees).
+- Operator narrative: **README §11** and **COMMANDS.md** “How thorough…”.
+  Keep those docs in sync when adding collectors.
 
 ## Technology stack
 
 - **Python ≥ 3.10, standard library only.** No pip installs, no third-party
   imports, no venv required. Developed against Python 3.14.6 on macOS arm64.
 - Build backend: setuptools (≥ 68); console script `wtfssd = wtfssd.cli:main`.
-- External commands (all read-only): `smartctl` (optional —
+- External commands (all read-only, never via sudo): `smartctl` (optional —
   `brew install smartmontools`; degrades to "unavailable" when missing),
-  `sysctl`, `df`, `ps`, `du`, `osascript`, `launchctl`.
+  `sysctl`, `df`, `ps`, `du`, `osascript`, `launchctl`, plus the other
+  collectors’ tools (`tmutil`, `diskutil`, `iostat`, `lsof`, …).
 - Targets macOS (Apple Silicon primary; Intel works with varying SMART
   coverage).
 
@@ -223,7 +241,8 @@ them in any change to `cleaners.py`:
   when enabled it records only file paths, line numbers, and rule names —
   never the matched values.
 - Never run external commands with `shell=True`; never require `sudo`
-  (smartctl works without it on the target platform).
+  (smartctl works without it on Apple Silicon for the internal NVMe; if it
+  fails, report `available=False` — do not wrap with sudo).
 
 ## Development workflow notes
 

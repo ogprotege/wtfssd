@@ -161,6 +161,46 @@ On a healthy machine you should see roughly:
 
 ---
 
+## How thorough is full scan? (no sudo)
+
+**Product rule: never `sudo`.** Scans never prompt for a password. The code
+never invokes `sudo` (collectors go through `run_cmd` only).
+
+Full scan is **complete for every collector we ship that works without root**.
+It is not “partial because we forgot sudo” — root-only extras are
+deliberately out of product.
+
+### Full tier collectors (default `wtfssd scan`)
+
+`swap`, `disk`, `processes`, `pressure`, `smart`, `system`, `backup`,
+`retention`, `launchd`, `spotlight`, `mcp`, `statedirs` (**AI-core only**),
+`apfs`, `crashes`, `churn`, `fds`, `secrets` (if enabled), `logs`,
+`gitwatch` (if `git.repos` set), `writerate`, plus **external SMART** when
+`smart.external_devices` is set.
+
+### Max in-product thoroughness
+
+```sh
+brew install smartmontools
+# optional: secrets.enabled, git.repos, smart.external_devices, projects
+wtfssd scan --bulk-state
+```
+
+### Never collected (need root or out of scope)
+
+| Gap | Needs |
+|-----|--------|
+| SMC die temps / fan continuous | `sudo powermetrics` |
+| `/var/vm` swapfile listing | root |
+| System-wide fs_usage I/O attribution | root + heavy |
+| Whole-disk inventory of every folder | not the product |
+| Other users’ homes | privacy / permissions |
+| API token *cost* tracking | different product |
+
+Full narrative: [README §11](README.md#11-how-thorough-is-a-scan-coverage--no-sudo).
+
+---
+
 # Part 3 — Command reference
 
 ## `scan` — diagnose
