@@ -11,20 +11,44 @@ DEFAULTS: dict[str, Any] = {
              "mount": "/System/Volumes/Data"},
     "procs": {"ghost_days": 3.0, "warn_count": 20,
               "leak_warn_mb_h": 100, "leak_window_h": 6},
-    "state": {"vscdb_warn_gb": 2.0, "growth_warn_gb_day": 1.0,
-              "total_warn_gb": 20.0},
+    "state": {
+        "vscdb_warn_gb": 2.0,
+        "growth_warn_gb_day": 1.0,
+        "total_warn_gb": 20.0,
+        "growth_min_samples": 4,
+        "growth_min_days": 3.0,
+        "growth_max_gb_day": 50.0,
+        "include_bulk_default": False,
+    },
     "smart": {"device": "/dev/disk0", "writes_warn_gb_day": 300.0,
               "external_devices": []},
     "alerts": {"enabled": True, "cooldown_hours": 24.0,
                "cooldown_critical_hours": 4.0},
-    "watch": {"interval_minutes": 60, "fast_interval_minutes": 5},
+    "watch": {
+        "interval_minutes": 60,
+        "fast_interval_minutes": 15,
+        "agent_mode": "hourly",  # hourly | fast | both | none
+    },
     "clean": {"node_stale_days": 30, "caches_top_n": 10, "caches_min_mb": 500},
     "projects": [],
-    "tiers": {"fast": ["smart", "swap", "disk", "processes", "pressure",
-                       "system", "writerate", "backup", "retention",
-                       "launchd", "spotlight", "mcp"],
-              "slow": ["statedirs", "apfs", "crashes", "churn",
-                       "fds", "secrets", "logs", "gitwatch"]},
+    "tiers": {
+        # Allow-lists. build_report only runs collectors named for the active tier.
+        "micro": ["swap", "disk", "processes", "pressure"],
+        "fast": [
+            "swap", "disk", "processes", "pressure",
+            "smart", "system", "backup", "retention",
+            "launchd", "spotlight", "mcp",
+        ],
+        "full": [
+            "swap", "disk", "processes", "pressure",
+            "smart", "system", "backup", "retention",
+            "launchd", "spotlight", "mcp",
+            "statedirs", "apfs", "crashes", "churn",
+            "fds", "secrets", "logs", "gitwatch", "writerate",
+            # external_smart follows config smart.external_devices; always
+            # attempted in full when the list is non-empty (see cli).
+        ],
+    },
     "pressure": {"sustained_min": 10},
     "apfs": {"snapshot_warn_days": 7},
     "backup": {"enabled": True, "warn_hours": 48, "crit_hours": 168},

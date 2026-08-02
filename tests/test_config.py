@@ -40,6 +40,21 @@ class TestConfig(unittest.TestCase):
             config.load_config(p)
         self.assertEqual(config.DEFAULTS["swap"]["warn_gb"], 8.0)
 
+    def test_tiers_are_allowlists(self):
+        cfg, warn = config.load_config(Path("/nonexistent/wtfssd-config.json"))
+        self.assertIsNone(warn)
+        tiers = cfg["tiers"]
+        self.assertIn("micro", tiers)
+        self.assertIn("fast", tiers)
+        self.assertIn("full", tiers)
+        self.assertIn("swap", tiers["micro"])
+        self.assertIn("disk", tiers["micro"])
+        self.assertNotIn("writerate", tiers["micro"])
+        self.assertNotIn("writerate", tiers["fast"])
+        self.assertIn("writerate", tiers["full"])
+        self.assertNotIn("statedirs", tiers["fast"])
+        self.assertIn("statedirs", tiers["full"])
+
 
 if __name__ == "__main__":
     unittest.main()
