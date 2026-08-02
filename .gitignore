@@ -1,10 +1,18 @@
+# Build / Python
 .DS_Store
 __pycache__/
 *.pyc
-.superpowers/
 *.egg-info/
 build/
 dist/
+
+# Agent process scratch (local only)
+.superpowers/
+
+# Local working notes — never publish
+WIP.md
+
+# Private research / source article — never publish
+# (local inspiration only; not part of the open product)
 IDEA-SSD.txt
 My-tool-mon_ideas.txt
-WIP.md
