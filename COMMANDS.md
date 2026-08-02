@@ -133,17 +133,35 @@ Rules: dry-run default · Trash not `rm` · app guards · backup-first for vscdb
 ```sh
 wtfssd optimize ignore [path …]   # merge .cursorignore rules (default: cwd)
 wtfssd optimize headroom          # free % + top monitored consumers
-wtfssd optimize install-agent     # LaunchAgent(s) — see resource-ethical note
-wtfssd optimize uninstall-agent   # remove com.wtfssd.watch (+ .fast if present)
+wtfssd optimize install-agent     # one hourly full agent by default
+wtfssd optimize install-agent --mode hourly|fast|both|none
+wtfssd optimize uninstall-agent   # remove both labels if present
 ```
 
-**Resource-ethical note (v2):** Prefer **CLI on demand** or **one** continuous path.
-Do not stack menubar polling + dual LaunchAgents while developing. Stage 4 will
-change `install-agent` defaults to a single hourly agent; today the CLI may still
-install two agents if you run `install-agent` — avoid that until Stage 4 lands
-unless you know you want it.
+### LaunchAgents (single-scheduler default)
 
-Labels: `com.wtfssd.watch`, `com.wtfssd.watch.fast` (legacy: `com.ssdwtf.*`).
+Prefer **CLI on demand** or **one** continuous path (menubar **or** one
+LaunchAgent — not both).
+
+| Mode | What gets installed |
+|------|---------------------|
+| `hourly` (**default**) | One agent: `com.wtfssd.watch` → `watch --once` every `watch.interval_minutes` (60) |
+| `fast` | One agent: `com.wtfssd.watch.fast` → `watch --once --fast` every `watch.fast_interval_minutes` |
+| `both` | Both agents; prints a **WARN** (two pollers stack; prefer hourly **or** menubar) |
+| `none` | Nothing installed (use menubar or run `scan` / `watch` manually) |
+
+How to choose mode:
+
+- Config: `"watch": { "agent_mode": "hourly" }` (default in code)
+- One-shot override: `wtfssd optimize install-agent --mode both`
+
+Other rules:
+
+- **`uninstall-agent`** removes **both** labels (`com.wtfssd.watch` and
+  `com.wtfssd.watch.fast`) if present.
+- **Menubar users** should run `wtfssd optimize uninstall-agent` so only one
+  continuous path runs.
+- Labels: `com.wtfssd.watch`, `com.wtfssd.watch.fast` (legacy: `com.ssdwtf.*`).
 
 ```sh
 # Inspect / unload agents manually
@@ -189,7 +207,7 @@ wtfssd config --path              # path to user config file
 | `tiers.micro` / `tiers.fast` / `tiers.full` | Collector allow-lists |
 | `watch.interval_minutes` | Full watch / hourly agent cadence |
 | `watch.fast_interval_minutes` | Fast agent cadence (if used) |
-| `watch.agent_mode` | Planned: `hourly` \| `fast` \| `both` \| `none` (Stage 4) |
+| `watch.agent_mode` | `hourly` (default) \| `fast` \| `both` \| `none` — what `install-agent` writes |
 | `state.growth_min_samples` | Growth gate (Stage 2) |
 | `state.growth_min_days` | Growth gate (Stage 2) |
 | `state.growth_max_gb_day` | Growth sanity cap (Stage 2) |
@@ -209,9 +227,10 @@ open build/WTFSSDMonitor.app
 ```
 
 - Package name in UI: **WTFSSD** / `wtfssd-menubar`
-- **Do not run** while dual LaunchAgents are also polling (Stage 0 presence A).
+- Prefer **either** menubar **or** a LaunchAgent, not both. If the app is
+  open, run `wtfssd optimize uninstall-agent`.
 - Stage 5 will switch title refresh to `scan --micro` and default 5 min interval.
-- Today (pre–Stage 5) the app may still call `scan --fast` every 60 s — leave it closed during resource-ethical work.
+- Today (pre–Stage 5) the app may still call `scan --fast` every 60 s — leave it closed if you also use agents.
 
 SwiftBar alternative: `contrib/swiftbar/wtfssd.5m.py`
 

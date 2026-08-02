@@ -60,8 +60,8 @@ wtfssd clean             # dry-run: lists what *would* be cleaned, deletes nothi
 wtfssd clean cursor-caches --apply   # actually clean (moves to Trash)
 wtfssd optimize ignore ~/my-project  # write/merge .cursorignore churn rules
 wtfssd optimize headroom             # free-space floor status + top consumers
-wtfssd optimize install-agent        # optional LaunchAgent(s); prefer one
-                                     # continuous path — see COMMANDS.md
+wtfssd optimize install-agent        # one hourly LaunchAgent by default
+                                     # (--mode hourly|fast|both|none; see COMMANDS.md)
 wtfssd watch --once      # single monitor pass + Notification Center alerts
 wtfssd history           # trend table built from past scans
 wtfssd digest            # one-look daily summary
@@ -209,7 +209,8 @@ full merged picture.
   `alerts.cooldown_critical_hours` (4 h). Info findings never notify.
 - `wtfssd/cleaners.py` — guarded, dry-run-first cleanup targets.
 - `wtfssd/optimize.py` — `.cursorignore` merging and optional LaunchAgents
-  (prefer a single continuous path; see [COMMANDS.md](COMMANDS.md)).
+  (default: one hourly full agent; dual stack is opt-in `--mode both`;
+  see [COMMANDS.md](COMMANDS.md)).
 - `wtfssd/cli.py` — the `wtfssd` command (`--micro` / `--fast` / full tiers).
 
 ## Tests

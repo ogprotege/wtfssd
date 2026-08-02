@@ -417,17 +417,23 @@ def build_parser() -> argparse.ArgumentParser:
     opt_sub.add_parser("headroom", help="free-space floor status + top consumers")
     pia = opt_sub.add_parser(
         "install-agent",
-        help="install LaunchAgent(s); default mode from watch.agent_mode "
-             "(hourly). Menubar users: uninstall agents (one continuous path)",
+        help="install LaunchAgent(s); default is one hourly full agent "
+             "(watch.agent_mode=hourly). Dual stack requires "
+             "agent_mode=both or --mode both. Menubar users: run "
+             "uninstall-agent so only one continuous path runs",
     )
     pia.add_argument(
         "--mode",
         choices=["hourly", "fast", "both", "none"],
         default=None,
         help="override watch.agent_mode for this install "
-             "(hourly|fast|both|none)",
+             "(hourly|fast|both|none; default hourly = one full agent)",
     )
-    opt_sub.add_parser("uninstall-agent", help="remove LaunchAgent(s)")
+    opt_sub.add_parser(
+        "uninstall-agent",
+        help="remove both LaunchAgent labels if present "
+             "(com.wtfssd.watch and com.wtfssd.watch.fast)",
+    )
     p.set_defaults(func=cmd_optimize)
 
     p = sub.add_parser("history", help="trend table")
