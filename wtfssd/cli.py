@@ -281,16 +281,30 @@ def cmd_optimize(args: argparse.Namespace) -> int:
             print("see: wtfssd clean")
         return 0
     if args.opt_command == "install-agent":
-        path, loaded = optimize.install_agent()
-        print(f"wrote {path}")
-        print("loaded with launchctl" if loaded else
-              f"not loaded — run: launchctl bootstrap gui/$(id -u) {path}")
         config, _ = load_config()
-        interval = int(config.get("watch", {}).get("fast_interval_minutes", 5)) * 60
-        fpath, floaded = optimize.install_fast_agent(interval_seconds=interval)
-        print(f"wrote {fpath} (fast tier, every {interval // 60} min)")
-        print("loaded with launchctl" if floaded else
-              f"not loaded — run: launchctl bootstrap gui/$(id -u) {fpath}")
+        mode = getattr(args, "mode", None) or config.get(
+            "watch", {}).get("agent_mode", "hourly")
+        interval = int(config.get("watch", {}).get(
+            "interval_minutes", 60)) * 60
+        fast_interval = int(config.get("watch", {}).get(
+            "fast_interval_minutes", 15)) * 60
+        if mode == "none":
+            print("agent_mode=none: nothing installed; use menubar or "
+                  "run scan manually")
+            print("tip: menubar users should keep agents uninstalled "
+                  "(one continuous path)")
+            return 0
+        if mode == "both":
+            print(optimize.WARN_BOTH)
+        results = optimize.install_agents(
+            mode,
+            interval_seconds=interval,
+            fast_interval_seconds=fast_interval,
+        )
+        for path, loaded in results:
+            print(f"wrote {path}")
+            print("loaded with launchctl" if loaded else
+                  f"not loaded — run: launchctl bootstrap gui/$(id -u) {path}")
         return 0
     if args.opt_command == "uninstall-agent":
         removed = optimize.uninstall_agent()
@@ -401,8 +415,19 @@ def build_parser() -> argparse.ArgumentParser:
     pi = opt_sub.add_parser("ignore", help="write/merge .cursorignore")
     pi.add_argument("paths", nargs="*")
     opt_sub.add_parser("headroom", help="free-space floor status + top consumers")
-    opt_sub.add_parser("install-agent", help="install hourly LaunchAgent")
-    opt_sub.add_parser("uninstall-agent", help="remove LaunchAgent")
+    pia = opt_sub.add_parser(
+        "install-agent",
+        help="install LaunchAgent(s); default mode from watch.agent_mode "
+             "(hourly). Menubar users: uninstall agents (one continuous path)",
+    )
+    pia.add_argument(
+        "--mode",
+        choices=["hourly", "fast", "both", "none"],
+        default=None,
+        help="override watch.agent_mode for this install "
+             "(hourly|fast|both|none)",
+    )
+    opt_sub.add_parser("uninstall-agent", help="remove LaunchAgent(s)")
     p.set_defaults(func=cmd_optimize)
 
     p = sub.add_parser("history", help="trend table")
