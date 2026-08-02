@@ -5,26 +5,11 @@ knowledge of the project.
 
 ## Repository state
 
-The package was restored on 2026-07-30 by transcribing the implementation
-plan's contractual code listings (the source had been lost from the working
-tree; the restoration was reviewed per-module and whole-codebase, 81/81
-tests green, live-verified on macOS). The full package source under
-`wtfssd/` is present and authoritative, alongside:
-
-- `pyproject.toml`, `README.md`, `LICENSE` — packaging, docs
-- `tests/` — the complete test suite (225 tests as of resource-ethical v2)
-  plus captured command-output fixtures in `tests/fixtures/`
-- `docs/superpowers/specs/2026-07-30-wtfssd-design.md` — the design spec
-- `docs/superpowers/plans/2026-07-30-wtfssd.md` — the implementation plan
-  (3128 lines; contains the **exact contractual source** for every module,
-  including code listings, per task)
-- `wtfssd/.superpowers/sdd/` — per-task briefs/reports from the original
-  build and the restoration (untracked process artifacts, gitignored)
-
-The git remote is `origin → https://github.com/ogprotege/wtfssd.git`. The
-checkout directory is named `wtfssd` but the project/package name is
-`wtfssd` — every authoritative artifact (pyproject, tests, spec, plan) uses
-`wtfssd`; do not rename the package to match the directory.
+Authoritative package: `wtfssd/` (console script `wtfssd`; legacy alias
+`ssdwtf`). Operator docs: **`README.md`** (intro) + **`COMMANDS.md`**
+(workflows & flags — keep these consistent with `cli.py`). Design:
+`docs/superpowers/specs/` (resource-ethical v2 wins on tiers/agents/CLI-only).
+Tests: `tests/` (**225** cases). Remote: `https://github.com/ogprotege/wtfssd.git`.
 
 ## Project overview
 
@@ -68,30 +53,27 @@ archives only.)
 ## Build and run commands
 
 ```sh
-# Run from source, no install needed (from repo root):
-python3 -m wtfssd scan
-python3 -m wtfssd scan --json
-python3 -m wtfssd clean                       # dry-run, deletes nothing
-python3 -m wtfssd clean cursor-caches --apply # actually clean (moves to Trash)
+python3 -m wtfssd scan                 # full forensic
+python3 -m wtfssd scan --micro         # cheapest tier
+python3 -m wtfssd scan --fast          # medium tier
+python3 -m wtfssd scan --bulk-state    # full + bulk state dirs
+python3 -m wtfssd clean                # dry-run
+python3 -m wtfssd clean cursor-caches --apply
 python3 -m wtfssd optimize ignore ~/my-project
+python3 -m wtfssd optimize install-agent   # one hourly agent by default
 python3 -m wtfssd watch --once
 python3 -m wtfssd history
-python3 -m wtfssd digest                      # one-look daily summary (--days N, --json)
+python3 -m wtfssd digest
 python3 -m wtfssd config --show
 
-# Install the `wtfssd` command into an isolated environment:
 pipx install .
-
-# Run the full test suite (from repo root):
 python3 -m unittest discover -s tests -v
-
-# Run a single test module:
 python3 -m unittest tests.test_config -v
 ```
 
-Exit codes for `scan` / `watch --once` / `digest`: `0` no findings,
-`1` warnings only, `2` any critical finding, `3` internal error. `clean`
-exits `0`, or `3` on an unknown target.
+Exit codes: `0` ok · `1` warnings · `2` critical · `3` error.  
+Human workflows: **COMMANDS.md** (do not invent flags not listed there / in
+`cli.py`).
 
 ## Code organization
 
@@ -112,7 +94,7 @@ wtfssd/
     swap.py              # sysctl vm.swapusage → SwapReport
     disk.py              # df -k /System/Volumes/Data → DiskReport
     processes.py         # ps → ghost IDE helpers + per-IDE RSS feed → ProcessReport
-    statedirs.py         # 18 known state dirs (categorized, double-count-guarded), state.vscdb sizes → StateDirReport
+    statedirs.py         # AI-core dirs by default; bulk (Xcode/Docker/Caches/…) via include_bulk; vscdb → StateDirReport
     pressure.py          # memory pressure: sysctl level + memory_pressure free-% → PressureReport
     system.py            # uptime (kern.boottime), pmset throttle, ioreg battery → SystemReport
     apfs.py              # tmutil local snapshots + diskutil container free → ApfsReport
