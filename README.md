@@ -54,13 +54,13 @@ wtfssd scan
 ```sh
 wtfssd scan              # full health report (forensic tier)
 wtfssd scan --json       # same, machine-readable
-wtfssd scan --micro      # menu-bar-safe vitals only (~0.1 s; no iostat / du)
+wtfssd scan --micro      # cheap vitals only (~0.1 s; no iostat / du)
 wtfssd scan --fast       # cheap counters; no statedirs walks, no writerate
 wtfssd clean             # dry-run: lists what *would* be cleaned, deletes nothing
 wtfssd clean cursor-caches --apply   # actually clean (moves to Trash)
 wtfssd optimize ignore ~/my-project  # write/merge .cursorignore churn rules
 wtfssd optimize headroom             # free-space floor status + top consumers
-wtfssd optimize install-agent        # one hourly LaunchAgent by default
+wtfssd optimize install-agent        # optional ONE hourly LaunchAgent
                                      # (--mode hourly|fast|both|none; see COMMANDS.md)
 wtfssd watch --once      # single monitor pass + Notification Center alerts
 wtfssd history           # trend table built from past scans
@@ -72,11 +72,19 @@ wtfssd config --show     # effective config (defaults + your overrides)
 [COMMANDS.md](COMMANDS.md). Keep that file and this README consistent when
 flags or the package name change.
 
+### Product surface: CLI only
+
+`wtfssd` is a **command-line tool**. Supported workflows are on-demand
+commands plus an optional single LaunchAgent for scheduled
+`watch --once` + Notification Center. There is **no supported GUI or menu
+bar product**. Trees under `menubar/` and `contrib/swiftbar/` are
+**unmaintained archives** — do not install them for normal use.
+
 ### Scan tiers (resource-ethical defaults)
 
 | Flag | Collectors (summary) | When to use |
 |------|----------------------|-------------|
-| `--micro` | swap, disk, processes, pressure | Frequent UI / polling |
+| `--micro` | swap, disk, processes, pressure | Scripted / frequent cheap checks |
 | `--fast` | micro + smart, system, backup, retention, launchd, spotlight, mcp | Occasional quick check |
 | *(default)* | full forensic: AI-core statedirs + **writerate** | On-demand diagnose |
 | `--bulk-state` | full + Xcode/Docker/Caches/models walks | Weekly headroom audit |
@@ -84,32 +92,6 @@ flags or the package name change.
 Exit codes for `scan` / `watch --once` / `digest`: `0` no findings,
 `1` warnings only, `2` any critical finding, `3` internal error. `clean`
 exits `0`, or `3` on an unknown target.
-
-## Menu bar app
-
-`menubar/` is a native Swift menu bar app (SwiftUI popover, no
-dependencies) that puts the health score and grade in the menu bar —
-`SSD 92·A`, colored green/yellow/red by the worst current finding. The
-popover shows a hero score + grade, a VITALS strip, all ten domains with
-status markers, the current findings, and Full Scan / Digest / Quit
-actions (scan and digest open in Terminal). Resource-ethical target: title
-refresh via `scan --micro` every **5 minutes** (Stage 5); until that lands,
-prefer leaving the app closed if you also run LaunchAgents. Everything it
-does is read-only.
-
-```sh
-cd menubar && ./build.sh        # builds build/WTFSSDMonitor.app
-open build/WTFSSDMonitor.app
-```
-
-The app prefers an installed `wtfssd` command; from a source checkout it
-falls back to `python3 -m wtfssd` with the repo root as working directory
-(the repo path is baked into the app at build time, so rebuild if you move
-the checkout).
-
-A SwiftBar/xbar plugin alternative remains at
-`contrib/swiftbar/wtfssd.5m.py` — same data, rendered as a text dropdown
-inside SwiftBar instead of a native popover.
 
 ## Safety model
 

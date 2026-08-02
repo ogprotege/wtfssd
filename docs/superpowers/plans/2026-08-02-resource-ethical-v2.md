@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make wtfssd quieter than the problems it finds: a rich on-demand forensic CLI, one optional background path, true micro/fast/full tiers, trustworthy growth alerts, and a menu bar that does not re-spawn multi-second Python scans every minute.
+**Goal:** Make wtfssd quieter than the problems it finds: a rich on-demand forensic **CLI**, one optional LaunchAgent, true micro/fast/full tiers, trustworthy growth alerts. **No menu bar product.**
 
-**Architecture:** Keep the Python collector engine and safety model. Fix continuous presence by (1) allow-list tiers instead of “skip slow list,” (2) split state walks into AI-core vs weekly bulk, (3) gate derived findings until baselines mature, (4) stop stacking menubar + dual LaunchAgents, (5) make the menubar poll a true micro path (or a cached status file). Do not add collectors, token accounting, or sudo monitors in this plan.
+**Architecture:** Keep the Python collector engine and safety model. Fix continuous presence by (1) allow-list tiers, (2) AI-core vs bulk statedirs, (3) growth gates, (4) single LaunchAgent default, (5) **CLI-only product posture** (menubar/SwiftBar unmaintained). Do not add collectors, token accounting, or sudo monitors in this plan.
 
-**Tech Stack:** Python ≥ 3.10 standard library only; Swift 6 / SwiftUI menubar (no deps); stdlib `unittest`; macOS launchd.
+**Tech Stack:** Python ≥ 3.10 standard library only; stdlib `unittest`; macOS launchd.
 
 **Source review:** Session plan “Honest product & architecture review: wtfssd” (2026-08-02). Live timings on this machine: writerate ~1.0s, statedirs ~1.45s, “fast” scan ~1.3s, full ~4.9s; menubar alone ≈ 38 min wall-scan/day at current defaults.
 
@@ -32,12 +32,12 @@ When every stage below is complete, all of the following must be true:
 - [x] `wtfssd scan --micro` finishes in **&lt; 100 ms** wall time on a warm machine (no iostat, no smartctl, no `du` walks). — **0.09 s** (2026-08-02)
 - [x] `wtfssd scan --fast` finishes in **&lt; 500 ms** typical (no writerate, no statedirs walk). — **0.21 s** (2026-08-02)
 - [x] `wtfssd scan` (full) still runs forensic collectors; AI-core statedirs every full scan; **bulk** statedirs only when `--bulk-state` or daily policy. — verified 2026-08-02
-- [ ] Menubar default refresh is **≥ 5 min** and uses **micro** (or status-file) path — not full `--fast` with iostat.
-- [x] `optimize install-agent` installs **at most one** continuous agent by default (hourly full **or** menubar-owned; no dual 5‑min + hourly stack as default). — verified 2026-08-02
+- [x] ~~Menubar micro path~~ **N/A — CLI-only product** (menubar unmaintained; no supported continuous UI). — 2026-08-02
+- [x] `optimize install-agent` installs **at most one** continuous agent by default (hourly full; no dual stack as default). — verified 2026-08-02
 - [x] `state.growth` does not fire until **≥ 3 calendar days** of comparable full statedirs samples exist and rate is within a sanity cap. — verified live 2026-08-02
-- [ ] Full suite green: `python3 -m unittest discover -s tests -v`
-- [ ] README + AGENTS.md describe micro/fast/full and the “one scheduler” rule.
-- [ ] Live self-check: with menubar running at defaults, Activity Monitor does not show a Python process every 60s for ~1+ second.
+- [x] Product is **CLI-only**; README / COMMANDS / AGENTS / spec say so. — 2026-08-02
+- [ ] Full suite green: `python3 -m unittest discover -s tests -v` (Stage 6)
+- [ ] README + COMMANDS stay consistent through final PR (Stage 6)
 
 ---
 
@@ -51,12 +51,10 @@ When every stage below is complete, all of the following must be true:
 | `wtfssd/history.py` | Mature baseline gates for `state_growth_gb_per_day` |
 | `wtfssd/analyze.py` | Use gated growth; optional confidence/evidence wording |
 | `wtfssd/optimize.py` | Default single agent; optional fast agent only with explicit flag |
-| `menubar/.../main.swift` | Defaults, full-scan interval, scheduler exclusivity notes |
-| `menubar/.../Scanner.swift` | Call `--micro` for title ticks; full on longer timer / open |
-| `menubar/.../PopoverView.swift` / `DetailViews.swift` | Refresh picker defaults (5m / 15m / 30m) |
-| `tests/test_cli.py`, `test_config.py`, `test_history.py`, `test_analyze.py`, `test_statedirs.py`, `test_optimize.py` | Tier + growth + agent tests |
-| `README.md`, `AGENTS.md`, design spec patch | Document resource-ethical posture |
-| `docs/superpowers/specs/2026-08-02-resource-ethical-v2.md` | Short companion spec (Stage A) |
+| `menubar/`, `contrib/swiftbar/` | **Unmaintained archives** only (Stage 5) |
+| `tests/test_*.py` | Tier + growth + agent + bulk tests |
+| `README.md`, `COMMANDS.md`, `AGENTS.md` | CLI-only + resource-ethical posture |
+| `docs/superpowers/specs/2026-08-02-resource-ethical-v2.md` | Spec (CLI-only wins) |
 
 ---
 
@@ -70,9 +68,9 @@ When every stage below is complete, all of the following must be true:
 | **2** | Growth trust gates | Stops false panic findings | Code session 2 | **DONE 2026-08-02** |
 | **3** | State registry split | Removes expensive walks from default full | Code session 3 | **DONE 2026-08-02** |
 | **4** | Single-scheduler agents | Stops dual LaunchAgent stack | Code session 4 | **DONE 2026-08-02** |
-| **5** | Menubar micro path | Makes UI ethical by default | Code session 5 |
+| **5** | CLI-only product cut | Drop menubar from supported surface | Docs + plan | **DONE 2026-08-02** |
 | **6** | Docs + verification | Ship confidence | Final session |
-| **7** | Optional: status-file daemon | Only if micro-from-Swift is still not enough | Later / optional |
+| **7** | ~~Status-file daemon~~ | Was menubar support; **cancelled** (CLI-only) | — | **CANCELLED** |
 
 **Dependency graph:**
 
@@ -910,11 +908,51 @@ git commit -m "optimize: default single LaunchAgent (hourly); both is opt-in"
 | Commits | `9f80e5a`, `55befa4` |
 | Modes | hourly (default) · fast · both (warn) · none |
 | CLI | `wtfssd optimize install-agent [--mode …]` |
-| Next | **Stage 5** — menubar micro path |
+| Next | ~~Stage 5 menubar~~ → **Stage 5 CLI-only product cut** |
 
 ---
 
-# STAGE 5 — Menubar micro path
+# STAGE 5 — CLI-only product cut (replaces menubar micro path)
+
+> **STATUS: COMPLETED 2026-08-02**  
+> Decision: **no menu bar product**. Stages 5.1–5.2 (Swift micro polling) are **cancelled**.  
+> Deliverable: docs + spec + unmaintained markers; code messages no longer recommend menubar.
+
+**Goal:** Product identity is the Python CLI only. Continuous presence = optional single LaunchAgent. Menubar/SwiftBar are archives, not features.
+
+### Task 5.1: ~~Scanner calls `--micro`~~ CANCELLED
+
+Replaced by product decision: do not ship or maintain the native menu bar.
+
+### Task 5.1 (new): Document CLI-only + archive markers
+
+- [x] Spec: product posture CLI-only; menubar non-goal
+- [x] README / COMMANDS / AGENTS demote menubar and SwiftBar
+- [x] `menubar/UNMAINTAINED.md`, `contrib/swiftbar/UNMAINTAINED.md`
+- [x] CLI strings: no “use menubar” guidance
+
+### Task 5.2: ~~Menubar settings exclusivity~~ CANCELLED
+
+N/A — app not supported.
+
+**Stage 5 done when:** docs and spec state CLI-only; menubar not in happy path. **MET.**
+
+### Stage 5 completion log
+
+| Field | Value |
+|-------|--------|
+| Completed | 2026-08-02 |
+| Decision | CLI-only product |
+| Cancelled | Menubar micro polling (old 5.1/5.2) |
+| Next | **Stage 6** — suite + PR polish |
+
+---
+
+# STAGE 5 (ARCHIVED ORIGINAL) — Menubar micro path — DO NOT IMPLEMENT
+
+**Original goal (superseded):** Title refresh no longer runs 1s iostat Python scans every minute.
+
+<details><summary>Original menubar steps (cancelled)</summary>
 
 **Goal:** Title refresh no longer runs 1s iostat Python scans every minute.
 
@@ -1015,31 +1053,31 @@ If this app is open, run: wtfssd optimize uninstall-agent
 
 - [ ] **Step 2: Commit**
 
-**Stage 5 done when:** menubar default path uses `--micro` and full is ≤ hourly.
+**Stage 5 done when:** menubar default path uses `--micro` and full is ≤ hourly. **SUPERSEDED — do not implement.**
 
 ---
 
+</details>
+
 # STAGE 6 — Docs, suite, live verification
 
-### Task 6.1: README + AGENTS.md
+### Task 6.1: README + AGENTS.md + COMMANDS.md
 
-**Files:**
-- Modify: `README.md` (Quick start, Menu bar, config keys)
-- Modify: `AGENTS.md` (tiers, agent_mode, bulk-state, growth keys)
+**Files:** already largely done through Stage 5 CLI-only cut; Stage 6 is final consistency pass.
 
-- [ ] **Step 1: README changes (concrete)**
+- [ ] **Step 1: Confirm README / COMMANDS / AGENTS match CLI-only + tiers + single agent**
 
-Replace the `scan --fast` blurb with:
+Expected references:
 
 ```markdown
-wtfssd scan --micro            # menu-bar-safe vitals only (<100ms target)
-wtfssd scan --fast             # cheap counters, no statedirs/writerate walks
+wtfssd scan --micro            # cheap vitals (<100ms)
+wtfssd scan --fast             # cheap counters, no statedirs/writerate
 wtfssd scan                    # full forensic (AI-core state dirs)
 wtfssd scan --bulk-state       # also size Xcode/Docker/Caches/models (slow)
 wtfssd optimize install-agent  # ONE hourly LaunchAgent by default
 ```
 
-Menubar section: refresh every **5 minutes** from `scan --micro`; full detail hourly.
+No supported menu bar section in the happy path.
 
 - [ ] **Step 2: AGENTS.md** — update tier description; remove claim that fast includes writerate/backup if no longer true; document `watch.agent_mode`.
 

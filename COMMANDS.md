@@ -10,9 +10,10 @@ This file is the operator cheat sheet. Keep it in sync with `wtfssd/cli.py`
 and `wtfssd/config.py`. When names or flags change, update **this file and
 README.md together**.
 
-Resource-ethical posture (v2): prefer **on-demand CLI**. Continuous presence
-is optional; use **at most one** of menubar or LaunchAgent. Prefer
-`scan --micro` for anything polled often.
+**Product surface: CLI only.** On-demand commands are the default. Continuous
+presence is optional: **at most one** LaunchAgent (`install-agent`, default
+hourly). Prefer `scan --micro` / `scan --fast` for cheap checks. No supported
+menu bar or GUI.
 
 ---
 
@@ -75,7 +76,7 @@ Live check:
 wtfssd scan
 wtfssd scan --json
 wtfssd scan --no-history          # do not append history.jsonl / metrics.db
-wtfssd scan --micro               # menu-bar-safe vitals
+wtfssd scan --micro               # cheap vitals (~0.1 s)
 wtfssd scan --fast                # cheap counters, no statedirs/writerate
 wtfssd scan --micro --json --no-history
 wtfssd scan --bulk-state          # full + Xcode/Docker/Caches/models sizing
@@ -140,15 +141,15 @@ wtfssd optimize uninstall-agent   # remove both labels if present
 
 ### LaunchAgents (single-scheduler default)
 
-Prefer **CLI on demand** or **one** continuous path (menubar **or** one
-LaunchAgent — not both).
+Prefer **CLI on demand**. If you want background alerts, install **one**
+LaunchAgent — not two.
 
 | Mode | What gets installed |
 |------|---------------------|
 | `hourly` (**default**) | One agent: `com.wtfssd.watch` → `watch --once` every `watch.interval_minutes` (60) |
 | `fast` | One agent: `com.wtfssd.watch.fast` → `watch --once --fast` every `watch.fast_interval_minutes` |
-| `both` | Both agents; prints a **WARN** (two pollers stack; prefer hourly **or** menubar) |
-| `none` | Nothing installed (use menubar or run `scan` / `watch` manually) |
+| `both` | Both agents; prints a **WARN** (two pollers stack — avoid) |
+| `none` | Nothing installed; use on-demand `scan` / `watch` |
 
 How to choose mode:
 
@@ -159,8 +160,6 @@ Other rules:
 
 - **`uninstall-agent`** removes **both** labels (`com.wtfssd.watch` and
   `com.wtfssd.watch.fast`) if present.
-- **Menubar users** should run `wtfssd optimize uninstall-agent` so only one
-  continuous path runs.
 - Labels: `com.wtfssd.watch`, `com.wtfssd.watch.fast` (legacy: `com.ssdwtf.*`).
 
 ```sh
@@ -219,20 +218,14 @@ Always: `wtfssd config --show` is truth for your machine.
 
 ---
 
-## Menu bar app (Swift)
+## Unmaintained: menu bar / SwiftBar
 
-```sh
-cd menubar && ./build.sh
-open build/WTFSSDMonitor.app
-```
+**Not part of the product.** Historical experiments may remain in-tree:
 
-- Package name in UI: **WTFSSD** / `wtfssd-menubar`
-- Prefer **either** menubar **or** a LaunchAgent, not both. If the app is
-  open, run `wtfssd optimize uninstall-agent`.
-- Stage 5 will switch title refresh to `scan --micro` and default 5 min interval.
-- Today (pre–Stage 5) the app may still call `scan --fast` every 60 s — leave it closed if you also use agents.
+- `menubar/` — native Swift popover (unmaintained archive)
+- `contrib/swiftbar/wtfssd.5m.py` — SwiftBar plugin (unmaintained)
 
-SwiftBar alternative: `contrib/swiftbar/wtfssd.5m.py`
+Do not install either for normal use. Use the CLI and optional LaunchAgent.
 
 ---
 

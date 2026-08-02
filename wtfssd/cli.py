@@ -289,10 +289,8 @@ def cmd_optimize(args: argparse.Namespace) -> int:
         fast_interval = int(config.get("watch", {}).get(
             "fast_interval_minutes", 15)) * 60
         if mode == "none":
-            print("agent_mode=none: nothing installed; use menubar or "
-                  "run scan manually")
-            print("tip: menubar users should keep agents uninstalled "
-                  "(one continuous path)")
+            print("agent_mode=none: nothing installed; use on-demand "
+                  "`wtfssd scan` / `watch`")
             return 0
         if mode == "both":
             print(optimize.WARN_BOTH)

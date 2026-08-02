@@ -50,15 +50,14 @@ Four pillars:
 - **Optimize** — `.cursorignore` generation, free-space floor tracking,
   launchd LaunchAgent for scheduled monitoring
 
-Non-goals: GUI, Docker cleanup, remote/fleet monitoring, Windows/Linux.
+Non-goals: GUI / menu bar product, Docker cleanup, remote/fleet monitoring,
+Windows/Linux. (`menubar/` and `contrib/swiftbar/` may exist as unmaintained
+archives only.)
 
 ## Technology stack
 
 - **Python ≥ 3.10, standard library only.** No pip installs, no third-party
   imports, no venv required. Developed against Python 3.14.6 on macOS arm64.
-  (This stdlib-only rule applies to the Python package; the menu bar app
-  under `menubar/` is a separate Swift artifact — plain Swift, no
-  dependencies.)
 - Build backend: setuptools (≥ 68); console script `wtfssd = wtfssd.cli:main`.
 - External commands (all read-only): `smartctl` (optional —
   `brew install smartmontools`; degrades to "unavailable" when missing),
@@ -137,30 +136,18 @@ wtfssd/
                          # + escalation transitions; alert_state.json state file
   cleaners.py            # CleanupTarget registry + dry-run/apply engine
   optimize.py            # .cursorignore writer, LaunchAgent plist install/uninstall
-                         # (install-agent installs both: hourly full + 5-min fast-tier)
+                         # (install-agent: one hourly agent by default)
   report.py              # human tables and --json serialization
 tests/
   fixtures/              # captured outputs: smartctl.txt, sysctl_swap.txt, df.txt, ps.txt
   test_*.py              # one module per component (see Testing below)
-contrib/
-  swiftbar/wtfssd.5m.py  # SwiftBar/xbar menu-bar plugin: SSD:<grade> title,
-                         # domains/findings dropdown; 5-min scan --fast, read-only
-menubar/                 # native menu bar app — separate Swift artifact, NOT
-                         # part of the Python package (Swift 6, SwiftPM,
-                         # SwiftUI popover, no dependencies)
-  Package.swift          # executable target wtfssd-menubar (macOS 13+)
-  Sources/wtfssd-menubar/  # main.swift (status item + popover, 60s refresh
-                         # from scan --fast --json --no-history; --snapshot /
-                         # --dump-menu debug flags), Scanner.swift, PopoverView.swift
-  Info.plist             # LSUIElement app metadata; build.sh bakes the repo
-                         # root into it and assembles build/WTFSSDMonitor.app
-  build.sh               # swift build -c release → build/WTFSSDMonitor.app
+contrib/swiftbar/        # UNMAINTAINED archive (not product)
+menubar/                 # UNMAINTAINED archive (not product) — see menubar/UNMAINTAINED.md
 ```
 
-The menu bar app under `menubar/` is a separate Swift artifact, not part of
-the Python package: it is plain Swift with no dependencies, built with
-SwiftPM (`cd menubar && ./build.sh`), and drives the CLI read-only
-(`scan --fast --json --no-history`).
+**Product surface is CLI only.** Do not treat `menubar/` or SwiftBar as
+supported deliverables. Optional continuous monitoring is a single LaunchAgent
+via `optimize install-agent` (default `watch.agent_mode=hourly`).
 
 Data flow: collectors → `models.HealthReport` → `analyze` → `[Finding]` +
 score → `report` (text | json); `history.append`, `metrics.record`, and

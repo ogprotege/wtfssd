@@ -133,8 +133,8 @@ def install_fast_agent(interval_seconds: int = 300,
 
 
 WARN_BOTH = (
-    "warning: agent_mode=both stacks two pollers; prefer hourly OR menubar, "
-    "not both (see resource-ethical v2 spec)"
+    "warning: agent_mode=both stacks two pollers; prefer hourly only "
+    "(CLI product — see resource-ethical v2 spec)"
 )
 
 
