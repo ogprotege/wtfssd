@@ -130,7 +130,7 @@ Collectors are **allow-lists** in config (`tiers.micro`, `tiers.fast`, `tiers.fu
 |------|------|----------------------------|----------------|-------------|
 | `--micro` | Micro | swap, free disk, memory pressure, IDE process counts | SMART, iostat, folder walks, almost everything else | “Is it thrashing *right now*?” |
 | `--fast` | Fast | micro + SMART, system (uptime/throttle/battery), backup, retention, launchd, Spotlight, MCP | statedirs walks, writerate (1-second iostat), APFS deep, crashes, logs, … | Quick morning check |
-| *(none)* | Full | fast + **AI-core state dirs**, APFS snapshots, crashes, churn, FDs, secrets (if on), logs, gitwatch, **writerate** | bulk trees (Xcode/Docker/Caches/models) | Real diagnose |
+| *(none)* | Full | fast + **AI-core state dirs**, APFS snapshots, crashes, churn, FDs, secrets (if on), logs, gitwatch, **writerate**, **top disk writers** | bulk trees (Xcode/Docker/Caches/models) | Real diagnose |
 | `--bulk-state` | Full+bulk | full + bulk state dirs | — | “What’s eating the disk?” |
 
 **AI-core state dirs (full default):** Cursor, Claude, VS Code, Windsurf, Zed,
@@ -175,7 +175,8 @@ deliberately out of product.
 `swap`, `disk`, `processes`, `pressure`, `smart`, `system`, `backup`,
 `retention`, `launchd`, `spotlight`, `mcp`, `statedirs` (**AI-core only**),
 `apfs`, `crashes`, `churn`, `fds`, `secrets` (if enabled), `logs`,
-`gitwatch` (if `git.repos` set), `writerate`, plus **external SMART** when
+`gitwatch` (if `git.repos` set), `writerate`, `writers` (top disk-writing
+processes via libproc — live processes only), plus **external SMART** when
 `smart.external_devices` is set.
 
 ### Max in-product thoroughness
@@ -226,6 +227,26 @@ wtfssd scan --json | python3 -m json.tool | less
 wtfssd scan --micro --no-history
 wtfssd scan --bulk-state
 ```
+
+### Reading `TOP DISK WRITERS` (full tier only)
+
+Full scan ranks live processes by **cumulative** disk bytes written,
+read from the kernel's own per-process counters (`proc_pid_rusage` —
+the same source as Activity Monitor's "Bytes Written" column; no sudo).
+Cost per scan: ~40 ms, ~0.5 MB transient memory, ~1.5 KB per history row.
+
+Read it with its limits in mind:
+
+- **Live processes only.** Exited agent/CLI sessions took their counters
+  with them — the "visible total" line is a floor, not the machine's total.
+- **Cumulative, not a rate.** Divide by the "alive" hours shown next to
+  each process.
+- **Permission-limited.** Root/system processes it cannot read are
+  skipped silently, never estimated.
+- **No file paths.** Per-file attribution needs root tracing
+  (`fs_usage`) and stays out of product.
+
+Full claims/non-claims table: README §11.
 
 ---
 

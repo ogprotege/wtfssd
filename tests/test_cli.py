@@ -21,7 +21,7 @@ def _patch_collectors_for_tier(stack, *, want_writerate=False, want_statedirs=Fa
     def _patch(*args, **kwargs):
         return stack.enter_context(mock.patch.object(*args, **kwargs))
 
-    called = {"writerate": False, "statedirs": False}
+    called = {"writerate": False, "statedirs": False, "writers": False}
 
     def wr(*a, **k):
         called["writerate"] = True
@@ -31,8 +31,13 @@ def _patch_collectors_for_tier(stack, *, want_writerate=False, want_statedirs=Fa
         called["statedirs"] = True
         return models.StateDirReport(note="spy")
 
+    def wrs(*a, **k):
+        called["writers"] = True
+        return models.WritersReport(available=False, error="spy")
+
     _patch(cli.writerate_col, "collect_writerate", wr)
     _patch(cli.statedirs_col, "collect_statedirs", sd)
+    _patch(cli.writers_col, "collect_writers", wrs)
     _patch(cli.swap_col, "collect_swap",
            return_value=models.SwapReport(0, 0, 0))
     _patch(cli.disk_col, "collect_disk",
@@ -171,6 +176,15 @@ class TestCli(unittest.TestCase):
             cli.build_report(config, tier="fast")
         self.assertFalse(called["writerate"])
         self.assertFalse(called["statedirs"])
+
+    def test_build_report_writers_only_on_full(self):
+        config, _ = config_mod.load_config(path=Path("/nonexistent"))
+        for tier, expected in (("micro", False), ("fast", False),
+                               ("full", True)):
+            with ExitStack() as stack:
+                called = _patch_collectors_for_tier(stack)
+                cli.build_report(config, tier=tier)
+            self.assertEqual(called["writers"], expected, tier)
 
     def test_clean_dry_run_lists_targets(self):
         with tempfile.TemporaryDirectory() as td, \

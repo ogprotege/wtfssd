@@ -30,6 +30,7 @@ from .collectors import statedirs as statedirs_col
 from .collectors import swap as swap_col
 from .collectors import system as system_col
 from .collectors import writerate as writerate_col
+from .collectors import writers as writers_col
 from .collectors._run import run_cmd
 from .config import config_path, load_config
 from .models import (ApfsReport, BackupReport, ChurnReport, CrashReport,
@@ -37,7 +38,7 @@ from .models import (ApfsReport, BackupReport, ChurnReport, CrashReport,
                      LogsReport, MCPReport, PressureReport, ProcessReport,
                      RetentionReport, SecretsReport, SmartReport,
                      SpotlightReport, StateDirReport, SystemReport,
-                     WriteRateReport, report_to_dict)
+                     WriteRateReport, WritersReport, report_to_dict)
 
 
 def host_ram_gb() -> float:
@@ -114,6 +115,9 @@ def build_report(config: dict, fast: bool = False, *,
                        config.get("writerate", {}).get("device", "disk0"))
                    if want("writerate")
                    else WriteRateReport(available=False, error=note)),
+        writers=(writers_col.collect_writers()
+                 if want("writers")
+                 else WritersReport(available=False, error=note)),
         external_smart=([smartext_col.collect_smart_external(d)
                          for d in config["smart"].get("external_devices", [])]
                         if want("smart") else []),

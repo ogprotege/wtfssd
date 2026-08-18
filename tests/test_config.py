@@ -52,6 +52,9 @@ class TestConfig(unittest.TestCase):
         self.assertNotIn("writerate", tiers["micro"])
         self.assertNotIn("writerate", tiers["fast"])
         self.assertIn("writerate", tiers["full"])
+        self.assertNotIn("writers", tiers["micro"])
+        self.assertNotIn("writers", tiers["fast"])
+        self.assertIn("writers", tiers["full"])
         self.assertNotIn("statedirs", tiers["fast"])
         self.assertIn("statedirs", tiers["full"])
 

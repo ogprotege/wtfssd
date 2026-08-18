@@ -30,7 +30,7 @@ becomes a meaningful fraction of the machine's background I/O or CPU.
 |------|------|----------------------|--------|
 | micro | `--micro` | swap, disk, processes, pressure | < 100 ms |
 | fast | `--fast` | micro + smart, system, backup, retention, launchd, spotlight, mcp | < 500 ms typical |
-| full | (default) | fast + statedirs (AI-core), apfs, crashes, churn, fds, secrets, logs, gitwatch, writerate | < 30 s OK |
+| full | (default) | fast + statedirs (AI-core), apfs, crashes, churn, fds, secrets, logs, gitwatch, writerate, writers | < 30 s OK |
 | bulk | full + `--bulk-state` | full + bulk statedirs (Xcode, Docker, HF, general Caches, models) | weekly / manual |
 
 Implementation: `build_report` uses **allow-lists** from config

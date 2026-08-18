@@ -44,7 +44,7 @@ DEFAULTS: dict[str, Any] = {
             "smart", "system", "backup", "retention",
             "launchd", "spotlight", "mcp",
             "statedirs", "apfs", "crashes", "churn",
-            "fds", "secrets", "logs", "gitwatch", "writerate",
+            "fds", "secrets", "logs", "gitwatch", "writerate", "writers",
             # external_smart follows config smart.external_devices; always
             # attempted in full when the list is non-empty (see cli).
         ],

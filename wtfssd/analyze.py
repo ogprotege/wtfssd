@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from datetime import datetime
 
 from . import metrics
@@ -89,11 +90,32 @@ def analyze(report: HealthReport, history: list[HealthReport],
             "Check monthly: `wtfssd history`."))
         rate = gb_written_per_day(history)
         if rate is not None and rate >= cfg_smart["writes_warn_gb_day"]:
+            # cross-reference swap before naming a culprit: on high-RAM
+            # machines the same rate is state churn / cloud sync, not thrash
+            swap_gb = (report.swap.used_mb / 1024
+                       if report.swap is not None else None)
+            if swap_gb is not None and swap_gb < cfg_swap["warn_gb"]:
+                detail = (f"Swap is low ({swap_gb:.1f} GB), so this is "
+                          "not swap thrash — look at agent/tool state churn, "
+                          "cloud-sync daemons, and indexers.")
+                rec = ("`wtfssd clean` (dry-run) for reclaimable state; "
+                       "`wtfssd optimize ignore` for indexer churn; "
+                       "Activity Monitor → Disk for per-process bytes written.")
+            else:
+                detail = ("Sustained writes at this rate are usually swap "
+                          "thrash or snapshot churn, not wear-out.")
+                rec = ("Check swap (`wtfssd scan`) and add ignore rules: "
+                       "`wtfssd optimize ignore`.")
+            wr = report.writers
+            if wr.available and wr.top:
+                w0 = wr.top[0]
+                detail += (f" Top visible writer: "
+                           f"{w0.name.rsplit('/', 1)[-1]} "
+                           f"({w0.written_bytes / 1e9:.1f} GB since it "
+                           "started).")
             findings.append(_f("monitor", "warn", "smart.write_rate",
                 f"High write volume: ~{rate:.0f} GB/day",
-                "Sustained writes at this rate are usually swap thrash or snapshot churn, not wear-out.",
-                "Check swap (`wtfssd scan`) and add ignore rules: `wtfssd optimize ignore`.",
-                evidence="derived"))
+                detail, rec, evidence="derived"))
 
     # --- Swap ---
     if report.swap is not None:
@@ -133,9 +155,18 @@ def analyze(report: HealthReport, history: list[HealthReport],
             f"Oldest: {oldest.name} (pid {oldest.pid}, {oldest.rss_mb:.0f} MB RSS). Closed windows that never died.",
             "Cmd+Q the owning apps (red button is not enough), or `kill` the pids."))
     if procs.total_ide_processes > cfg_procs["warn_count"]:
+        # name the offenders: a bare count is unexplainable minutes later,
+        # once the helper tree that produced it has exited
+        families = Counter(p.name.rsplit("/", 1)[-1]
+                           for p in procs.ide_procs)
+        top = ", ".join(f"{name} ×{n}"
+                        for name, n in families.most_common(3))
+        detail = "Agentic IDEs spawn helper trees that outlive their windows."
+        if top:
+            detail += f" Top: {top}."
         findings.append(_f("monitor", "warn", "procs.many",
             f"{procs.total_ide_processes} IDE-related processes running",
-            "Agentic IDEs spawn helper trees that outlive their windows.",
+            detail,
             "Fully quit unused IDEs; check Activity Monitor."))
 
     # --- Agentic state ---
