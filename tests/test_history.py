@@ -10,13 +10,15 @@ from wtfssd import history
 
 
 def make_report(ts: str, units: int | None, state_bytes: int,
-                note: str | None = None) -> models.HealthReport:
+                note: str | None = None, *,
+                bulk_state: bool = False) -> models.HealthReport:
     rep = models.make_empty_report(ts, 64.0)
     rep.smart = models.SmartReport(available=units is not None,
                                    data_units_written=units,
                                    tb_written=(units or 0) * 512_000 / 1e12)
     rep.statedirs = models.StateDirReport(dirs=[], total_bytes=state_bytes,
                                           note=note)
+    rep.bulk_state = bulk_state
     return rep
 
 
@@ -52,18 +54,44 @@ class TestHistory(unittest.TestCase):
             loaded = history.load_history(limit=2, data_dir=dd)
         self.assertEqual([r.smart.data_units_written for r in loaded], [3, 4])
 
+    def test_load_limit_zero_or_negative_returns_empty(self):
+        with tempfile.TemporaryDirectory() as td:
+            dd = Path(td)
+            history.append_history(make_report("2026-07-30T10:00:00", 1, 1), data_dir=dd)
+            self.assertEqual(history.load_history(limit=0, data_dir=dd), [])
+            self.assertEqual(history.load_history(limit=-3, data_dir=dd), [])
+
     def test_write_rate(self):
-        h = [make_report("2026-07-29T10:00:00", 1_000_000, 0),
-             make_report("2026-07-30T10:00:00", 3_000_000, 0)]
+        now = datetime.now()
+        h = [make_report((now - timedelta(days=1)).isoformat(), 1_000_000, 0),
+             make_report(now.isoformat(), 3_000_000, 0)]
         # 2,000,000 units * 512,000 bytes / 1 day = 1024 GB/day
         self.assertAlmostEqual(history.gb_written_per_day(h), 1024.0)
 
+    def test_write_rate_sorts_by_timestamp(self):
+        now = datetime.now()
+        newer = make_report(now.isoformat(), 3_000_000, 0)
+        older = make_report((now - timedelta(days=1)).isoformat(), 1_000_000, 0)
+        self.assertAlmostEqual(history.gb_written_per_day([newer, older]), 1024.0)
+
     def test_write_rate_none_when_insufficient(self):
+        now = datetime.now()
         self.assertIsNone(history.gb_written_per_day([]))
-        self.assertIsNone(history.gb_written_per_day([make_report("2026-07-30T10:00:00", 5, 0)]))
-        same = [make_report("2026-07-30T10:00:00", 5, 0),
-                make_report("2026-07-30T10:30:00", 6, 0)]  # < 1 hour window
+        self.assertIsNone(history.gb_written_per_day([make_report(now.isoformat(), 5, 0)]))
+        same = [make_report((now - timedelta(minutes=30)).isoformat(), 5, 0),
+                make_report(now.isoformat(), 6, 0)]  # < 1 hour window
         self.assertIsNone(history.gb_written_per_day(same))
+
+    def test_write_rate_trailing_window_ignores_old_jump(self):
+        now = datetime.now()
+        day = timedelta(days=1)
+        # huge jump 40 days ago must not dilute / inflate the trailing slope
+        h = [make_report((now - 40 * day).isoformat(), 1_000_000, 0),
+             make_report((now - 39 * day).isoformat(), 100_000_000, 0),
+             make_report((now - day).isoformat(), 100_000_000, 0),
+             make_report(now.isoformat(), 102_000_000, 0)]
+        # 2,000,000 units * 512,000 bytes / 1 day = 1024 GB/day
+        self.assertAlmostEqual(history.gb_written_per_day(h), 1024.0)
 
     def test_state_growth_rate(self):
         now = datetime.now()
@@ -140,6 +168,23 @@ class TestHistory(unittest.TestCase):
              make_report(now.isoformat(), None, 201_000_000_000)]
         self.assertIsNone(history.state_growth_gb_per_day(
             h, min_samples=4, min_span_days=3.0, max_gb_day=50.0))
+
+    def test_state_growth_ignores_mismatched_bulk_rows(self):
+        now = datetime.now()
+        day = timedelta(days=1)
+        # bulk row with a huge total must not pair with later AI-core rows
+        h = [
+            make_report((now - 4 * day).isoformat(), None, 1_000_000_000_000,
+                        bulk_state=True),
+            make_report((now - 3 * day).isoformat(), None, 1_000_000_000),
+            make_report((now - 2 * day).isoformat(), None, 2_000_000_000),
+            make_report((now - day).isoformat(), None, 3_000_000_000),
+            make_report(now.isoformat(), None, 4_000_000_000),
+        ]
+        self.assertAlmostEqual(
+            history.state_growth_gb_per_day(
+                h, min_samples=4, min_span_days=3.0, max_gb_day=None),
+            1.0)
 
 
 if __name__ == "__main__":

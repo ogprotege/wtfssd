@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import time
 from dataclasses import dataclass, field
@@ -46,18 +47,64 @@ class CleanupTarget:
 
 
 PROTECTED = ("Documents", "Desktop", "Movies", "Music", "Pictures")
+_PROTECTED_CF = frozenset(p.casefold() for p in PROTECTED)
+
+
+def _norm(path: Path) -> Path:
+    return Path(os.path.normpath(str(path.expanduser())))
+
+
+def _outside_or_protected(path: Path, home: Path) -> bool:
+    try:
+        rel = path.relative_to(home)
+    except ValueError:
+        return True
+    if path == home:
+        return True
+    return bool(rel.parts) and rel.parts[0].casefold() in _PROTECTED_CF
+
+
+def _stays_under(path: Path, root: Path) -> bool:
+    """True when resolve(path) is still inside resolve(root). Used so rglob
+    cannot follow a directory symlink out of the intended tree."""
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except (ValueError, OSError, RuntimeError):
+        return False
+
+
+def _rglob_under(root: Path, pattern: str) -> list[Path]:
+    if root.is_symlink() or not root.is_dir():
+        return []
+    out: list[Path] = []
+    try:
+        for p in root.rglob(pattern):
+            if _stays_under(p, root):
+                out.append(p)
+    except OSError:
+        return out
+    return out
 
 
 def is_denied(path: Path, home: Path) -> bool:
+    home_n = _norm(home)
+    lit = _norm(path)
+    if _outside_or_protected(lit, home_n):
+        return True
+    try:
+        if path.is_symlink():
+            # The link lives in an allowed location; callers must unlink/move
+            # the link itself, never follow it into a backup.
+            return False
+    except OSError:
+        return True
     try:
         resolved = path.resolve()
-        resolved.relative_to(home.resolve())
-    except (ValueError, OSError):
+        home_r = home.resolve()
+    except (OSError, RuntimeError):
         return True
-    if resolved == home.resolve():
-        return True
-    rel = resolved.relative_to(home.resolve())
-    return bool(rel.parts) and rel.parts[0] in PROTECTED
+    return _outside_or_protected(resolved, home_r)
 
 
 def _items(paths: list[Path]) -> list[CleanupItem]:
@@ -97,9 +144,8 @@ def _cursor_snapshots(home: Path, cfg: dict) -> list[CleanupItem]:
     packs: list[Path] = []
     for root in (home / ".cursor",
                  home / "Library/Application Support/Cursor/CachedData"):
-        if root.is_dir():
-            packs.extend(root.rglob("*.pack"))
-    return _items([p for p in packs if p.is_file()])
+        packs.extend(_rglob_under(root, "*.pack"))
+    return _items([p for p in packs if p.is_file() and not p.is_symlink()])
 
 
 def _claude_caches(home: Path, cfg: dict) -> list[CleanupItem]:
@@ -133,8 +179,9 @@ def _node_modules_stale(home: Path, cfg: dict) -> list[CleanupItem]:
         root_path = Path(root).expanduser()
         if not root_path.is_dir():
             continue
-        for nm in root_path.rglob("node_modules"):
-            if nm.is_dir() and nm.stat().st_mtime < cutoff:
+        for nm in _rglob_under(root_path, "node_modules"):
+            if (nm.is_dir() and not nm.is_symlink()
+                    and nm.stat().st_mtime < cutoff):
                 if "node_modules" not in nm.parent.parts:  # top-level only
                     found.append(nm)
     return _items(found)
@@ -195,8 +242,14 @@ def _trash_dest(path: Path, home: Path) -> Path:
     trash = home / ".Trash"
     trash.mkdir(exist_ok=True)
     dest = trash / path.name
-    if dest.exists():
-        dest = trash / f"{path.name}.wtfssd-{datetime.now():%Y%m%d%H%M%S}"
+    if not dest.exists():
+        return dest
+    stamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    dest = trash / f"{path.name}.wtfssd-{stamp}"
+    n = 1
+    while dest.exists():
+        dest = trash / f"{path.name}.wtfssd-{stamp}-{n}"
+        n += 1
     return dest
 
 
@@ -221,8 +274,14 @@ def clean_target(target_id: str, home: Path | None = None,
         if is_denied(path, home):
             result.actions.append(CleanAction(item.path, item.size_bytes, "denied"))
             continue
+        if path.is_symlink() and target.backup_first:
+            result.actions.append(CleanAction(
+                item.path, item.size_bytes, "denied-symlink"))
+            continue
         if not apply:
-            result.actions.append(CleanAction(item.path, item.size_bytes, "would-trash"))
+            preview = ("would-delete" if (hard or target.id == "trash")
+                       else "would-trash")
+            result.actions.append(CleanAction(item.path, item.size_bytes, preview))
             continue
         try:
             backed_up = False
@@ -231,16 +290,18 @@ def clean_target(target_id: str, home: Path | None = None,
                     from .config import data_dir
                     backup_dir = data_dir() / "backups" / f"{datetime.now():%Y%m%d-%H%M%S}"
                 backup_dir.mkdir(parents=True, exist_ok=True)
+                dest = backup_dir / path.name
                 if path.is_dir():
-                    shutil.copytree(path, backup_dir / path.name)
+                    shutil.copytree(path, dest, symlinks=True)
                 else:
-                    shutil.copy2(path, backup_dir / path.name)
+                    shutil.copy2(path, dest, follow_symlinks=False)
                 backed_up = True
             if hard or target.id == "trash":
-                if path.is_dir():
-                    shutil.rmtree(path)
-                else:
+                # Unlink a symlink; never rmtree through it.
+                if path.is_symlink() or path.is_file():
                     path.unlink()
+                else:
+                    shutil.rmtree(path)
                 action = "deleted"
             else:
                 shutil.move(str(path), str(_trash_dest(path, home)))

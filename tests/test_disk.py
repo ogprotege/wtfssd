@@ -33,6 +33,20 @@ class TestDisk(unittest.TestCase):
     def test_collect_none_on_failure(self):
         self.assertIsNone(disk.collect_disk(runner=fake_runner(None)))
 
+    def test_parse_mount_with_spaces(self):
+        text = ("Filesystem 1024-blocks Used Avail Capacity iused ifree %iused Mounted on\n"
+                "/dev/disk4s1 1000000 500000 500000 50% 1 2 0% /Volumes/My Drive\n")
+        rep = disk.parse_df(text, "/Volumes/My Drive")
+        self.assertEqual(rep.mount, "/Volumes/My Drive")
+        self.assertEqual(rep.pct_used, 50.0)
+        self.assertAlmostEqual(rep.size_gb, 1000000 * 1024 / 1e9, places=3)
+
+    def test_collect_none_on_unparseable(self):
+        self.assertIsNone(disk.collect_disk(runner=fake_runner("not a df table\n")))
+
+    def test_collect_does_not_raise_on_garbage(self):
+        self.assertIsNone(disk.collect_disk(runner=fake_runner("")))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -482,7 +482,7 @@ rather than half-implemented behind a password.
 | **churn** | Index snapshot turnover vs baseline | Create/destroy write churn |
 | **fds** | `lsof` (what your user can see) | Open-file blowups |
 | **logs** | Size `~/Library/Logs` (+ config extras) | Log growth |
-| **gitwatch** | `git status` on **configured** repos only | Uncommitted / unpushed work |
+| **gitwatch** | `git status` on **configured** repos only (hooks/fsmonitor/gc/filters disabled) | Uncommitted / unpushed work |
 | **secrets** | Only if `secrets.enabled: true` | Path/line/rule hits — never values |
 | **writerate** | `iostat` (~1 s sample) | Live write MB/s |
 | **writers** | `ps` + libproc rusage (Activity Monitor's source) | Which live processes wrote the most bytes (exited processes are invisible — stated in the report) |
@@ -801,7 +801,8 @@ hourly full.
 
 **Q: Does clean remove my projects / source code?**  
 A: Not by design. Targets are caches, derived data, tool state. Protected
-paths (Documents, Desktop, …) and paths outside your home are denied.
+paths (Documents, Desktop, … — matched case-insensitively) and paths
+outside your home are denied. Symlinks are refused, not followed.
 
 **Q: Secrets scanner?**  
 A: Off by default. Enable only if you want path/line/rule hits in agent state

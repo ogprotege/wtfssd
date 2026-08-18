@@ -8,12 +8,12 @@ from wtfssd.config import DEFAULTS
 
 
 def _write_heavy_history() -> list[models.HealthReport]:
-    """~410 GB/day of SMART writes (span-based math — absolute dates are fine)."""
+    """~410 GB/day of SMART writes over the last two days."""
     h = []
-    for i, ts in enumerate(["2026-07-13T10:00:00", "2026-07-14T10:00:00",
-                            "2026-07-15T10:00:00"]):
+    now = datetime.now()
+    for i in range(3):
         r = base_report()
-        r.timestamp = ts
+        r.timestamp = (now - timedelta(days=2 - i)).isoformat(timespec="seconds")
         r.smart.data_units_written = 100_000_000 + i * 800_000
         h.append(r)
     return h
@@ -464,6 +464,41 @@ class TestPhase3Pressure(unittest.TestCase):
             codes = {f.code for f in analyze.analyze(
                 rep, [], dict(DEFAULTS), metrics_path=db)}
             self.assertIn("pressure.warn", codes)
+
+    def test_pressure_warn_needs_three_samples_when_metrics_exist(self):
+        import tempfile
+        from pathlib import Path as P
+        from wtfssd import metrics as metrics_mod
+        rep = _base_report()
+        rep.pressure = models.PressureReport(available=True, level=2)
+        with tempfile.TemporaryDirectory() as td:
+            db = P(td) / "m.db"
+            now = datetime.now()
+            for i in range(2):
+                r = models.make_empty_report(
+                    (now - timedelta(hours=1 - i)).isoformat(timespec="seconds"),
+                    64.0)
+                r.pressure = models.PressureReport(available=True, level=2)
+                metrics_mod.record(r, path=db)
+            codes = {f.code for f in analyze.analyze(
+                rep, [], dict(DEFAULTS), metrics_path=db)}
+            self.assertNotIn("pressure.warn", codes)
+
+    def test_pressure_warn_needs_two_samples_when_metrics_exist(self):
+        import tempfile
+        from pathlib import Path as P
+        from wtfssd import metrics as metrics_mod
+        rep = _base_report()
+        rep.pressure = models.PressureReport(available=True, level=2)
+        with tempfile.TemporaryDirectory() as td:
+            db = P(td) / "m.db"
+            r = models.make_empty_report(
+                datetime.now().isoformat(timespec="seconds"), 64.0)
+            r.pressure = models.PressureReport(available=True, level=2)
+            metrics_mod.record(r, path=db)
+            codes = {f.code for f in analyze.analyze(
+                rep, [], dict(DEFAULTS), metrics_path=db)}
+            self.assertNotIn("pressure.warn", codes)
 
 
 if __name__ == "__main__":

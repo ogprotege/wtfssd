@@ -119,6 +119,16 @@ class TestPhase2Models(unittest.TestCase):
     def test_process_report_ide_procs_default(self):
         self.assertEqual(models.ProcessReport().ide_procs, [])
 
+    def test_ide_procs_survive_roundtrip(self):
+        rep = sample_report()
+        rep.processes.ide_procs = [
+            models.GhostProcess(pid=9, ppid=1, name="Cursor",
+                                age_seconds=60, rss_mb=120.0)]
+        back = models.report_from_dict(models.report_to_dict(rep))
+        self.assertEqual(len(back.processes.ide_procs), 1)
+        self.assertEqual(back.processes.ide_procs[0].name, "Cursor")
+        self.assertEqual(back.processes.ide_procs[0].rss_mb, 120.0)
+
     def test_roundtrip_nested_phase2(self):
         rep = models.make_empty_report("2026-07-30T10:00:00", 64.0)
         rep.mcp = models.MCPReport(

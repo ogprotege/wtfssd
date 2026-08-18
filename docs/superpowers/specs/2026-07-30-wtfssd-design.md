@@ -146,7 +146,10 @@ Safety model (from the article's two rules: quit the app first; copy before dele
 4. **Backup-first for databases.** `state.vscdb` targets copy the file to
    `~/.local/share/wtfssd/backups/<timestamp>/` before moving to Trash.
 5. **Denylist.** Paths under `~/Documents`, `~/Desktop`, `~/Pictures`, home root itself, and any
-   path outside `$HOME` are refused outright.
+   path outside `$HOME` are refused outright. Protected first-path-component names are
+   compared case-insensitively (APFS). Backups refuse symlinks (never follow).
+   Deleting a symlink unlinks the link. Collector walks (`*.pack`, `node_modules`)
+   must stay under their intended root.
 
 Targets (each: id, title, paths, risk level, owner-app guard, notes):
 

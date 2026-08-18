@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import plistlib
 import sys
 from pathlib import Path
 
@@ -43,35 +44,18 @@ def _program_args(fast: bool = False) -> list[str]:
 def _plist(label: str, interval_seconds: int, log_path: Path,
            fast: bool = False) -> str:
     args = _program_args(fast=fast)
-    args_xml = "\n".join(f"        <string>{a}</string>" for a in args)
-    env_xml = ""
+    data: dict = {
+        "Label": label,
+        "ProgramArguments": args,
+        "StartInterval": int(interval_seconds),
+        "StandardOutPath": str(log_path),
+        "StandardErrorPath": str(log_path),
+    }
     if args[1:2] == ["-m"]:  # source checkout → needs PYTHONPATH
-        repo_root = str(Path(__file__).resolve().parent.parent)
-        env_xml = f"""    <key>EnvironmentVariables</key>
-    <dict>
-        <key>PYTHONPATH</key>
-        <string>{repo_root}</string>
-    </dict>"""
-    return f"""<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>{label}</string>
-    <key>ProgramArguments</key>
-    <array>
-{args_xml}
-    </array>
-{env_xml}
-    <key>StartInterval</key>
-    <integer>{interval_seconds}</integer>
-    <key>StandardOutPath</key>
-    <string>{log_path}</string>
-    <key>StandardErrorPath</key>
-    <string>{log_path}</string>
-</dict>
-</plist>
-"""
+        data["EnvironmentVariables"] = {
+            "PYTHONPATH": str(Path(__file__).resolve().parent.parent),
+        }
+    return plistlib.dumps(data).decode()
 
 
 def install_agent(interval_seconds: int = 3600,

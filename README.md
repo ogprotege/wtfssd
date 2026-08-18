@@ -18,7 +18,7 @@ regenerable junk safely — and tells you plainly what it can and cannot know.
 ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![macOS](https://img.shields.io/badge/platform-macOS-111111?style=flat-square&logo=apple&logoColor=white)
 ![Dependencies: none](https://img.shields.io/badge/dependencies-none%20·%20stdlib%20only-2ea44f?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-240%20passing-2ea44f?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-274%20passing-2ea44f?style=flat-square)
 ![sudo: never](https://img.shields.io/badge/sudo-never-d73a49?style=flat-square)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
 

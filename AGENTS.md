@@ -10,7 +10,7 @@ Authoritative package: `wtfssd/` (console script `wtfssd`; legacy alias
 **`docs/MANUAL.md`** (full operator guide) + **`COMMANDS.md`**
 (workflows & flags — keep these consistent with `cli.py`). Design:
 `docs/superpowers/specs/` (resource-ethical v2 wins on tiers/agents/CLI-only).
-Tests: `tests/` (**240** cases). Remote: `https://github.com/ogprotege/wtfssd.git`.
+Tests: `tests/` (**274** cases). Remote: `https://github.com/ogprotege/wtfssd.git`.
 
 ## Project overview
 
@@ -108,7 +108,7 @@ wtfssd/
   config.py              # load/merge ~/.config/wtfssd/config.json over defaults
   collectors/
     __init__.py
-    _run.py              # run_cmd(): subprocess wrapper (timeout, no shell, never raises)
+    _run.py              # run_cmd(): subprocess wrapper (timeout, no shell, never raises; allow_empty for clean git status)
     smart.py             # smartctl -a /dev/disk0 → SmartReport
     swap.py              # sysctl vm.swapusage → SwapReport
     disk.py              # df -k /System/Volumes/Data → DiskReport
@@ -130,7 +130,7 @@ wtfssd/
     launchd.py           # LaunchAgent/Daemon additions vs stored baseline → LaunchdReport
     spotlight.py         # mds/mdworker CPU + mdutil indexing state → SpotlightReport
     logs.py              # ~/Library/Logs sizing + growth leaders → LogsReport
-    gitwatch.py          # read-only git status across configured repos → GitWatchReport
+    gitwatch.py          # read-only git status (hooks/fsmonitor/filters disabled) → GitWatchReport
   analyze.py             # reports + config + history → list[Finding] + health score 0–100
   history.py             # JSONL scan history; trend / growth-rate analysis
   metrics.py             # sqlite metrics baseline (~/.local/share/wtfssd/metrics.db)
@@ -190,7 +190,7 @@ These are contractual, from the implementation plan's global constraints:
 - Filesystem-touching tests (cleaners, optimize, history, config) run against
   `tempfile.TemporaryDirectory` and fakes; `cli` tests use `unittest.mock` to
   patch `build_report`, `analyze`, history, and config paths.
-- The suite is **240 tests, all passing** (resource-ethical v2: allow-list
+- The suite is **274 tests, all passing** (resource-ethical v2: allow-list
   tiers, growth gates, AI/bulk statedirs, single LaunchAgent, CLI-only,
   writers attribution). Operator docs: `README.md` (front page) +
   `docs/MANUAL.md` + `COMMANDS.md`.
@@ -242,7 +242,7 @@ them in any change to `cleaners.py`:
   to `~/.local/share/wtfssd/backups/` before removal.
 - **Denylist.** Paths outside the user's home directory, the home directory
   itself, and `Documents`/`Desktop`/`Movies`/`Music`/`Pictures` are never
-  touched.
+  touched (name match is case-insensitive). Symlinks are refused, not followed.
 - **Read-only monitoring.** `scan`, `watch`, `history`, and `config` only
   read the system.
 - **Secrets scanner is opt-in.** `secrets.enabled` defaults to `false`; even

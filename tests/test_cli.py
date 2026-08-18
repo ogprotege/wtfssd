@@ -203,6 +203,52 @@ class TestCli(unittest.TestCase):
             code = cli.main(["clean", "nope"])
         self.assertEqual(code, 3)
 
+    def test_clean_action_error_exits_3(self):
+        with mock.patch("wtfssd.cleaners.clean_target") as ct, \
+             redirect_stdout(io.StringIO()):
+            from wtfssd.cleaners import CleanResult, CleanAction
+            ct.return_value = CleanResult("cursor-caches", True, actions=[
+                CleanAction("/x/Cache", 500, "error", error="EPERM")])
+            code = cli.main(["clean", "cursor-caches", "--apply"])
+        self.assertEqual(code, 3)
+
+    def test_clean_validates_all_targets_before_any_apply(self):
+        with mock.patch("wtfssd.cleaners.clean_target") as ct, \
+             redirect_stdout(io.StringIO()):
+            code = cli.main(["clean", "cursor-caches", "bogus", "--apply"])
+        self.assertEqual(code, 3)
+        ct.assert_not_called()
+
+    def test_build_report_tolerates_null_mcp_config_path(self):
+        config, _ = config_mod.load_config(path=Path("/nonexistent"))
+        config = dict(config)
+        config["mcp"] = {"config_path": None}
+        with ExitStack() as stack:
+            _patch_collectors_for_tier(stack)
+            spy = stack.enter_context(mock.patch.object(
+                cli.mcp_col, "collect_mcp",
+                return_value=models.MCPReport(available=False, error="spy")))
+            cli.build_report(config, tier="full")
+        args, kwargs = spy.call_args
+        path = kwargs.get("config_path", args[0] if args else "missing")
+        self.assertIsNone(path)
+
+    def test_build_report_passes_mcp_config_path(self):
+        config, _ = config_mod.load_config(path=Path("/nonexistent"))
+        custom = str(Path.home() / "custom-mcp.json")
+        config = dict(config)
+        config["mcp"] = dict(config.get("mcp", {}), config_path=custom)
+        with ExitStack() as stack:
+            _patch_collectors_for_tier(stack)
+            spy = stack.enter_context(mock.patch.object(
+                cli.mcp_col, "collect_mcp",
+                return_value=models.MCPReport(available=False, error="spy")))
+            cli.build_report(config, tier="full")
+        self.assertTrue(spy.called)
+        args, kwargs = spy.call_args
+        path = kwargs.get("config_path", args[0] if args else None)
+        self.assertEqual(Path(path), Path(custom).expanduser())
+
     def test_config_show(self):
         with redirect_stdout(io.StringIO()) as buf:
             code = cli.main(["config", "--show"])

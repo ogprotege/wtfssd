@@ -254,13 +254,17 @@ def analyze(report: HealthReport, history: list[HealthReport],
                 "The kernel is under extreme memory pressure; Apple Silicon masks it as silent thrashing.",
                 "Quit memory-heavy apps; check ghost processes below."))
         elif pr.level >= 2:
-            sustained = True  # fallback: no metrics → point-in-time (Phase-1 behavior)
-            if metrics_path is not None:
+            minutes = config.get("pressure", {}).get("sustained_min", 180)
+            if metrics_path is None:
+                sustained = True  # no metrics store → point-in-time fallback
+            else:
                 samples = metrics.series(
                     "pressure.level",
-                    days=config.get("pressure", {}).get("sustained_min", 10) / 1440.0,
+                    days=minutes / 1440.0,
                     path=metrics_path)
-                if len(samples) >= 2:
+                if len(samples) < 3:
+                    sustained = False
+                else:
                     sustained = (sum(1 for _, v in samples if v >= 2)
                                  / len(samples)) >= 0.5
             if sustained:
