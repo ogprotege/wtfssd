@@ -37,6 +37,9 @@ class TestReport(unittest.TestCase):
         self.assertEqual(report.format_bytes(1536), "1.5 KB")
         self.assertEqual(report.format_bytes(int(2.5e9)), "2.5 GB")
         self.assertEqual(report.format_bytes(int(54e12)), "54.0 TB")
+        # .1f rounding must not print "1000.0 GB"
+        self.assertEqual(report.format_bytes(int(999.96e9)), "1.0 TB")
+        self.assertEqual(report.format_bytes(int(999.94e9)), "999.9 GB")
 
     def test_text_contains_sections(self):
         rep, findings = sample()

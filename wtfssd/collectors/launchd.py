@@ -32,15 +32,21 @@ def collect_launchd(home: Optional[Path] = None,
             continue
     names = {n for n in names if not n.startswith(_SELF_PREFIX)}
 
-    baseline_exists = state_path.exists()
-    previous: set[str] = set()
-    if baseline_exists:
+    previous: set[str] | None = None
+    if state_path.exists():
         try:
-            previous = set(json.loads(state_path.read_text()).get("names", []))
-        except (json.JSONDecodeError, OSError):
-            previous = set()
-
-    new = sorted(names - previous) if baseline_exists else []
+            data = json.loads(state_path.read_text())
+            if not isinstance(data, dict) or "names" not in data:
+                raise TypeError("names missing")
+            raw = data["names"]
+            if not isinstance(raw, list):
+                raise TypeError("names is not a list")
+            previous = {str(n) for n in raw}
+        except (json.JSONDecodeError, OSError, TypeError, AttributeError,
+                ValueError):
+            previous = None
+    baseline_exists = previous is not None
+    new = sorted(names - previous) if previous is not None else []
     try:
         state_path.parent.mkdir(parents=True, exist_ok=True)
         state_path.write_text(json.dumps({"names": sorted(names)}))

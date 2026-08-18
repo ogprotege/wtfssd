@@ -80,6 +80,12 @@ def build_report(config: dict, fast: bool = False, *,
 
     include_bulk = bulk_state or bool(
         config.get("state", {}).get("include_bulk_default", False))
+    mcp_cfg: Path | None = None
+    if want("mcp"):
+        mcp_block = config.get("mcp")
+        raw = mcp_block.get("config_path") if isinstance(mcp_block, dict) else None
+        if isinstance(raw, str) and raw.strip():
+            mcp_cfg = Path(raw).expanduser()
 
     return HealthReport(
         timestamp=datetime.now().isoformat(timespec="seconds"),
@@ -127,7 +133,7 @@ def build_report(config: dict, fast: bool = False, *,
                  else LaunchdReport(available=False, error=note)),
         spotlight=(spotlight_col.collect_spotlight() if want("spotlight")
                    else SpotlightReport(available=False, error=note)),
-        mcp=(mcp_col.collect_mcp() if want("mcp")
+        mcp=(mcp_col.collect_mcp(config_path=mcp_cfg) if want("mcp")
              else MCPReport(available=False, error=note)),
         churn=(churn_col.collect_churn() if want("churn")
                else ChurnReport(available=False, error=note)),
@@ -224,14 +230,22 @@ def cmd_clean(args: argparse.Namespace) -> int:
         print(f"warning: {warn}", file=sys.stderr)
     target_ids = args.targets or [t.id for t in cleaners.list_targets()
                                   if t.risk == "safe"]
+    unknown = [tid for tid in target_ids if cleaners.get_target(tid) is None]
+    if unknown:
+        known = ", ".join(sorted(cleaners.TARGETS))
+        for tid in unknown:
+            print(f"unknown target: {tid} (known: {known})")
+        return 3
+    had_error = False
     for tid in target_ids:
         target = cleaners.get_target(tid)
         if target is None:
-            print(f"unknown target: {tid} "
-                  f"(known: {', '.join(sorted(cleaners.TARGETS))})")
+            print(f"unknown target: {tid}")
             return 3
         res = cleaners.clean_target(tid, config=config, apply=args.apply,
                                     hard=args.hard, force=args.force)
+        if any(a.error for a in res.actions):
+            had_error = True
         if args.json:
             print(json.dumps({
                 "target": res.target_id, "applied": res.applied,
@@ -256,7 +270,7 @@ def cmd_clean(args: argparse.Namespace) -> int:
             total = sum(a.size_bytes for a in res.actions)
             print(f"  dry-run — would free {report_mod.format_bytes(total)} "
                   f"(pass --apply)")
-    return 0
+    return 3 if had_error else 0
 
 
 def cmd_optimize(args: argparse.Namespace) -> int:

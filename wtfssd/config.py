@@ -49,7 +49,7 @@ DEFAULTS: dict[str, Any] = {
             # attempted in full when the list is non-empty (see cli).
         ],
     },
-    "pressure": {"sustained_min": 10},
+    "pressure": {"sustained_min": 180},
     "apfs": {"snapshot_warn_days": 7},
     "backup": {"enabled": True, "warn_hours": 48, "crit_hours": 168},
     "crashes": {"warn_weekly": 3,

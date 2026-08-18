@@ -19,7 +19,11 @@ def _scan_packs(home: Path) -> dict[str, int]:
         try:
             for p in root.rglob("*.pack"):
                 try:
-                    if p.is_file():
+                    p.resolve().relative_to(root.resolve())
+                except (ValueError, OSError, RuntimeError):
+                    continue
+                try:
+                    if p.is_file() and not p.is_symlink():
                         out[str(p.relative_to(home))] = p.stat().st_size
                 except OSError:
                     continue
@@ -40,11 +44,19 @@ def collect_churn(home: Optional[Path] = None,
         return ChurnReport(available=False, error=str(exc))
 
     previous: dict[str, int] = {}
-    baseline_exists = state_path.exists()
-    if baseline_exists:
+    baseline_exists = False
+    if state_path.exists():
         try:
-            previous = json.loads(state_path.read_text()).get("packs", {})
-        except (json.JSONDecodeError, OSError):
+            data = json.loads(state_path.read_text())
+            if not isinstance(data, dict) or "packs" not in data:
+                raise TypeError("packs missing")
+            packs = data["packs"]
+            if not isinstance(packs, dict):
+                raise TypeError("packs is not a dict")
+            previous = {str(k): int(v) for k, v in packs.items()}
+            baseline_exists = True
+        except (json.JSONDecodeError, OSError, TypeError, AttributeError,
+                ValueError):
             previous = {}
 
     added = sum(1 for k in current if k not in previous)

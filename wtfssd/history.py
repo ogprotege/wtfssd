@@ -34,9 +34,14 @@ def load_history(limit: int | None = None,
             continue
         try:
             reports.append(report_from_dict(json.loads(line)))
-        except (json.JSONDecodeError, KeyError, TypeError):
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError,
+                AttributeError):
             continue
-    return reports[-limit:] if limit else reports
+    if limit is None:
+        return reports
+    if limit <= 0:
+        return []
+    return reports[-limit:]
 
 
 def _window_days(first: HealthReport, last: HealthReport) -> float | None:
@@ -49,15 +54,26 @@ def _window_days(first: HealthReport, last: HealthReport) -> float | None:
     return days if days >= 1 / 24 else None  # require ≥ 1 hour window
 
 
-def gb_written_per_day(history: list[HealthReport]) -> float | None:
+def gb_written_per_day(history: list[HealthReport],
+                       window_days: float = 30.0) -> float | None:
     usable = [r for r in history
               if r.smart.available and r.smart.data_units_written is not None]
-    if len(usable) < 2:
+    cutoff = datetime.now() - timedelta(days=window_days)
+    recent: list[HealthReport] = []
+    for r in usable:
+        try:
+            ts = datetime.fromisoformat(r.timestamp)
+        except ValueError:
+            continue
+        if ts >= cutoff:
+            recent.append(r)
+    recent.sort(key=lambda r: datetime.fromisoformat(r.timestamp))
+    if len(recent) < 2:
         return None
-    days = _window_days(usable[0], usable[-1])
+    days = _window_days(recent[0], recent[-1])
     if not days:
         return None
-    delta = usable[-1].smart.data_units_written - usable[0].smart.data_units_written
+    delta = recent[-1].smart.data_units_written - recent[0].smart.data_units_written
     if delta < 0:
         return None  # counter reset
     return delta * 512_000 / 1e9 / days
@@ -85,6 +101,12 @@ def state_growth_gb_per_day(
             continue
         if ts >= cutoff:
             recent.append(r)
+    recent.sort(key=lambda r: datetime.fromisoformat(r.timestamp))
+    # comparable rows only: a --bulk-state scan's total is a different
+    # measurement than AI-core-only. Fit against the newest row's mode.
+    if recent:
+        bulk = bool(recent[-1].bulk_state)
+        recent = [r for r in recent if bool(r.bulk_state) == bulk]
     if len(recent) < min_samples:
         return None
     days = _window_days(recent[0], recent[-1])

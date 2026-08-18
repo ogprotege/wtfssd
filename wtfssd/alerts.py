@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import unicodedata
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable
@@ -13,6 +14,13 @@ Notifier = Callable[[Finding], bool]
 
 
 def _escape(text: str) -> str:
+    cleaned: list[str] = []
+    for ch in text:
+        if unicodedata.category(ch) in ("Cc", "Zl", "Zp"):
+            cleaned.append(" ")
+        else:
+            cleaned.append(ch)
+    text = "".join(cleaned)
     return text.replace("\\", "\\\\").replace('"', '\\"')
 
 

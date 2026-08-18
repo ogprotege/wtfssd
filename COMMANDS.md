@@ -32,7 +32,9 @@ Used by `scan`, `watch --once`, and `digest`:
 | **2** | At least one **critical** | act soon |
 | **3** | Bad usage or internal error | fix command / report bug |
 
-`clean` exits **0** on success, **3** if you name an unknown target.
+`clean` exits **0** on success, **3** if you name an unknown target
+(the whole list is checked before any `--apply` mutation) or if any
+applied action reports an error.
 
 ---
 
@@ -325,8 +327,11 @@ wtfssd clean trash --apply                 # empty Trash
 
 - Paths outside your home → refused  
 - Home directory itself → refused  
-- `Documents` / `Desktop` / `Movies` / `Music` / `Pictures` → refused  
+- `Documents` / `Desktop` / `Movies` / `Music` / `Pictures` → refused (case-insensitive; `~/documents` is still Documents)  
+- Symlinks are refused (not followed into a backup, not deleted as the target)  
 - App guard when `guard_app` is running → skip unless `--force`  
+- Unknown target in a multi-target list → abort **before** any `--apply`  
+- Dry-run labels `trash` / `--hard` as `would-delete` (those paths are permanent)  
 
 ---
 
@@ -506,6 +511,8 @@ Missing file → all defaults. Invalid JSON → defaults + warning (tool still r
 | `smart.external_devices` | `[]` | Extra disks for SMART |
 | `backup.enabled` | true | Time Machine domain on/off |
 | `secrets.enabled` | **false** | Opt-in secrets path scan |
+| `pressure.sustained_min` | 180 | Minutes of metrics before “sustained” pressure warn (fits hourly watch) |
+| `mcp.config_path` | Claude desktop config | Passed through to the MCP collector |
 | `tiers.micro` / `fast` / `full` | lists | Collector allow-lists (advanced) |
 
 See everything: `wtfssd config --show`.

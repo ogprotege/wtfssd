@@ -47,6 +47,27 @@ class TestChurn(unittest.TestCase):
             self.assertTrue(rep.available)
             self.assertEqual(rep.pack_count, 0)
 
+    def test_empty_object_baseline_is_missing(self):
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td)
+            state = home / "state.json"
+            _mk(home, ".cursor/idx/a.pack", 100)
+            state.write_text("{}")
+            rep = churn.collect_churn(home=home, state_path=state)
+            self.assertEqual(rep.added, 0)
+            self.assertEqual(rep.note, "baseline stored")
+
+    def test_corrupt_baseline_does_not_count_as_turnover(self):
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td)
+            state = home / "state.json"
+            _mk(home, ".cursor/idx/a.pack", 100)
+            state.write_text("{not json")
+            rep = churn.collect_churn(home=home, state_path=state)
+            self.assertEqual(rep.added, 0)
+            self.assertEqual(rep.removed, 0)
+            self.assertEqual(rep.note, "baseline stored")
+
 
 if __name__ == "__main__":
     unittest.main()

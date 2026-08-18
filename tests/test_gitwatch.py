@@ -47,12 +47,74 @@ class TestGitWatch(unittest.TestCase):
             rep = gitwatch.collect_repo(Path(td), runner=_runner_for())
             self.assertEqual(rep.error, "not a git repository")
 
+    def test_clean_porcelain_is_not_a_failure(self):
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / ".git").mkdir()
+            rep = gitwatch.collect_repo(Path(td), runner=_runner_for(status=""))
+            self.assertIsNone(rep.error)
+            self.assertEqual((rep.uncommitted, rep.untracked), (0, 0))
+
     def test_collect_gitwatch(self):
         with tempfile.TemporaryDirectory() as td:
             (Path(td) / ".git").mkdir()
             rep = gitwatch.collect_gitwatch([td], runner=_runner_for())
             self.assertTrue(rep.available)
             self.assertEqual(len(rep.repos), 1)
+
+    def test_git_invocations_disable_hooks_and_fsmonitor(self):
+        # Defensive argv contract: never run a repo's hooks or fsmonitor.
+        # This asserts flags only — it does not execute git or a hook.
+        seen: list[list[str]] = []
+
+        def runner(cmd):
+            seen.append(list(cmd))
+            return ""
+
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / ".git").mkdir()
+            gitwatch.collect_repo(Path(td), runner=runner)
+        self.assertTrue(seen)
+        for cmd in seen:
+            self.assertEqual(cmd[0], "git")
+            self.assertIn("--no-pager", cmd)
+            self.assertIn("core.fsmonitor=", cmd)
+            self.assertIn("core.useBuiltinFSMonitor=false", cmd)
+            self.assertIn("core.hooksPath=/dev/null", cmd)
+            self.assertIn("gc.auto=0", cmd)
+            self.assertIn("log.showSignature=false", cmd)
+            self.assertIn("--no-optional-locks", cmd)
+            self.assertGreaterEqual(cmd.count("-c"), 5)
+
+    def test_status_disables_listed_filters(self):
+        seen: list[list[str]] = []
+
+        def runner(cmd, allow_empty=False, **_kw):
+            seen.append(list(cmd))
+            if "config" in cmd and "--get-regexp" in cmd:
+                return "filter.evil.clean /tmp/x\nfilter.evil.smudge /tmp/x\n"
+            return ""
+
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / ".git").mkdir()
+            gitwatch.collect_repo(Path(td), runner=runner)
+        status_cmds = [c for c in seen if "status" in c]
+        self.assertTrue(status_cmds)
+        self.assertIn("filter.evil.clean=", status_cmds[0])
+        self.assertIn("filter.evil.required=false", status_cmds[0])
+
+    def test_status_runner_receives_allow_empty(self):
+        flags: list[bool] = []
+
+        def runner(cmd, allow_empty=False, **_kw):
+            if "status" in cmd:
+                flags.append(allow_empty)
+                return ""
+            return "origin\n"
+
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / ".git").mkdir()
+            gitwatch.collect_repo(Path(td), runner=runner)
+        self.assertEqual(flags, [True])
 
 
 if __name__ == "__main__":

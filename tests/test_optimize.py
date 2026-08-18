@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import plistlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -46,6 +47,10 @@ class TestAgent(unittest.TestCase):
             self.assertIn("watch", text)
             self.assertIn("--once", text)
             self.assertFalse(loaded)  # launchctl bootstrap into test dir fails/no-op
+            data = plistlib.loads(path.read_bytes())
+            self.assertEqual(data["Label"], "com.wtfssd.watch")
+            self.assertEqual(data["StartInterval"], 3600)
+            self.assertIn("--once", data["ProgramArguments"])
 
     def test_uninstall_removes_plist(self):
         with tempfile.TemporaryDirectory() as td:

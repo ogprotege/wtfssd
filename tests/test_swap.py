@@ -36,6 +36,15 @@ class TestSwap(unittest.TestCase):
         self.assertIsNotNone(rep)
         self.assertEqual(rep.used_mb, 1536.25)
 
+    def test_parse_gigabyte_units(self):
+        text = "vm.swapusage: total = 2.00G  used = 1.50G  free = 0.50G  (encrypted)"
+        rep = swap.parse_swapusage(text)
+        self.assertAlmostEqual(rep.used_mb, 1.50 * 1024)
+        self.assertAlmostEqual(rep.total_mb, 2.00 * 1024)
+
+    def test_collect_none_on_unparseable(self):
+        self.assertIsNone(swap.collect_swap(runner=fake_runner("vm.swapusage: ???")))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -73,6 +73,29 @@ class TestLaunchd(unittest.TestCase):
             self.assertEqual(rep2.agent_count, 1)
             self.assertEqual(rep2.new_since_baseline, [])
 
+    def test_empty_object_baseline_is_missing(self):
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td)
+            _mk(home / "Library/LaunchAgents", "com.a.plist")
+            state = home / "b.json"
+            state.write_text("{}")
+            rep = launchd.collect_launchd(home=home, state_path=state,
+                                          system_dirs=())
+            self.assertEqual(rep.new_since_baseline, [])
+            self.assertFalse(rep.baseline_exists)
+
+    def test_corrupt_baseline_does_not_alarm(self):
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td)
+            _mk(home / "Library/LaunchAgents", "com.a.plist")
+            state = home / "b.json"
+            state.write_text("{not json")
+            rep = launchd.collect_launchd(home=home, state_path=state,
+                                          system_dirs=())
+            self.assertEqual(rep.new_since_baseline, [])
+            self.assertFalse(rep.baseline_exists)
+            self.assertEqual(rep.agent_count, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

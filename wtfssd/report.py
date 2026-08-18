@@ -11,7 +11,8 @@ _UNITS = ("B", "KB", "MB", "GB", "TB", "PB")
 def format_bytes(n: int | float) -> str:
     size = float(n)
     for unit in _UNITS:
-        if size < 1000 or unit == _UNITS[-1]:
+        # 999.95 formats as 1000.0 — promote before rounding, not after.
+        if unit == _UNITS[-1] or size < 999.95:
             return f"{size:.1f} {unit}" if unit != "B" else f"{int(size)} B"
         size /= 1000
     return f"{size:.1f} PB"

@@ -78,6 +78,39 @@ class TestAlerts(unittest.TestCase):
         self.assertNotIn('"swap"', script.split("display notification")[1].split("with title")[0]
                          .replace('\\"', ""))  # quotes escaped
 
+    def test_osascript_escapes_newlines(self):
+        calls = []
+
+        def fake_runner(argv, timeout=15):
+            calls.append(argv)
+            return "ok\n"
+
+        f = finding("warn", "x")
+        f.detail = "line1\nline2"
+        f.title = "title\rcr"
+        ok = alerts.notify(
+            f, notifier=lambda fa: alerts._osascript_notify(fa, fake_runner))
+        self.assertTrue(ok)
+        script = calls[0][2]
+        self.assertNotIn("\n", script.split("display notification", 1)[1])
+        self.assertNotIn("\r", script)
+
+    def test_osascript_strips_unicode_line_breaks(self):
+        calls = []
+
+        def fake_runner(argv, timeout=15):
+            calls.append(argv)
+            return "ok\n"
+
+        f = finding("warn", "x")
+        f.detail = "a\u2028b\u2029c"
+        ok = alerts.notify(
+            f, notifier=lambda fa: alerts._osascript_notify(fa, fake_runner))
+        self.assertTrue(ok)
+        script = calls[0][2]
+        self.assertNotIn("\u2028", script)
+        self.assertNotIn("\u2029", script)
+
     def test_osascript_notify_failure_returns_false(self):
         def failing_runner(argv, timeout=15):
             return None

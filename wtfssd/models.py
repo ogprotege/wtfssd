@@ -315,10 +315,25 @@ def report_from_dict(d: dict[str, Any]) -> HealthReport:
                            if k in SmartReport.__dataclass_fields__})
     swap = SwapReport(**d["swap"]) if d.get("swap") else None
     disk = DiskReport(**d["disk"]) if d.get("disk") else None
+    def _ghosts(raw_list: Any) -> list[GhostProcess]:
+        if not isinstance(raw_list, list):
+            return []
+        out: list[GhostProcess] = []
+        for g in raw_list:
+            if not isinstance(g, dict):
+                continue
+            try:
+                out.append(GhostProcess(**{k: v for k, v in g.items()
+                                           if k in GhostProcess.__dataclass_fields__}))
+            except TypeError:
+                continue
+        return out
+
     procs = ProcessReport(
-        ghosts=[GhostProcess(**g) for g in d["processes"].get("ghosts", [])],
+        ghosts=_ghosts(d["processes"].get("ghosts", [])),
         total_ide_processes=d["processes"].get("total_ide_processes", 0),
         note=d["processes"].get("note"),
+        ide_procs=_ghosts(d["processes"].get("ide_procs", [])),
     )
     statedirs = StateDirReport(
         dirs=[StateDir(**{k: v for k, v in s.items()

@@ -10,6 +10,31 @@ The package version remains **0.1.0** until a formal release cut.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Pre-public hardening** — `gitwatch` disables repo hooks, fsmonitor,
+  auto-gc, signature helpers, and listed `filter.*` clean/smudge/process
+  commands (no hook/filter is executed to prove it). Clean
+  `git status --porcelain` is no longer treated as failure.
+- **Clean safety** — denylist is case-insensitive; snapshot/`node_modules`
+  walks stay under their roots; backups refuse symlinks; Trash unlinks
+  a link without following it; dry-run labels Trash/`--hard` as
+  `would-delete`; unknown targets abort before any `--apply`; action
+  errors exit 3.
+- **History / analyze honesty** — `ide_procs` survive JSONL roundtrip;
+  `--last 0` returns no rows; write-rate uses a 30-day window and sorts
+  by timestamp; state-growth ignores mixed bulk/AI-core rows; corrupt
+  or empty launchd/churn baselines do not false-alarm; pressure
+  “sustained” needs 3 samples in a 180-minute window; unparseable swap
+  is unknown, not 0.0 GB; spaced `df` mounts no longer crash the
+  collector; `mcp.config_path` is actually passed and a JSON `null`
+  cannot crash a scan.
+
+### Changed
+
+- LaunchAgent plists are written with `plistlib` (no f-string XML).
+- `format_bytes` promotes 999.95+ so it never prints `1000.0 GB`.
+
 ### Added
 
 - **Top disk writers collector** (`collectors/writers.py`) — per-process
