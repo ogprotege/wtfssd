@@ -6,7 +6,8 @@ knowledge of the project.
 ## Repository state
 
 Authoritative package: `wtfssd/` (console script `wtfssd`; legacy alias
-`ssdwtf`). Operator docs: **`README.md`** (intro) + **`COMMANDS.md`**
+`ssdwtf`). Operator docs: **`README.md`** (front page) +
+**`docs/MANUAL.md`** (full operator guide) + **`COMMANDS.md`**
 (workflows & flags — keep these consistent with `cli.py`). Design:
 `docs/superpowers/specs/` (resource-ethical v2 wins on tiers/agents/CLI-only).
 Tests: `tests/` (**240** cases). Remote: `https://github.com/ogprotege/wtfssd.git`.
@@ -53,7 +54,7 @@ Windows/Linux, **any `sudo` / root requirement**. (`menubar/` and
 - **Tier ladder:** `micro` (swap/disk/procs/pressure) → `fast` (+ SMART and
   cheap signals) → `full` (+ statedirs, apfs, crashes, churn, fds, logs,
   writerate, writers, …) → `full` + `--bulk-state` (heavy non-AI trees).
-- Operator narrative: **README §11** and **COMMANDS.md** “How thorough…”.
+- Operator narrative: **docs/MANUAL.md §11** and **COMMANDS.md** “How thorough…”.
   Keep those docs in sync when adding collectors.
 
 ## Technology stack
@@ -191,7 +192,8 @@ These are contractual, from the implementation plan's global constraints:
   patch `build_report`, `analyze`, history, and config paths.
 - The suite is **240 tests, all passing** (resource-ethical v2: allow-list
   tiers, growth gates, AI/bulk statedirs, single LaunchAgent, CLI-only,
-  writers attribution). Operator docs: `README.md` + `COMMANDS.md`.
+  writers attribution). Operator docs: `README.md` (front page) +
+  `docs/MANUAL.md` + `COMMANDS.md`.
 - Tests that exercise wall-clock windows (`metrics.series`,
   `analyze._swap_rate_gb_day`, `history.state_growth_gb_per_day`) must build
   timestamps relative to `datetime.now()` — absolute dates rot into

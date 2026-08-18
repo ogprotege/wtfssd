@@ -38,11 +38,14 @@ The package version remains **0.1.0** until a formal release cut.
 
 ### Documentation
 
-- **Scan thoroughness / no-sudo boundary** — README §11, COMMANDS, AGENTS.md,
+- **README redesigned as a front page** — badges, terminal SVG demo,
+  wordmark, 2-minute quickstart; the full 18-section operator guide moved
+  intact to `docs/MANUAL.md` with all cross-references updated.
+- **Scan thoroughness / no-sudo boundary** — Manual §11, COMMANDS, AGENTS.md,
   and design specs state clearly that full `scan` runs every non-root
   collector the product ships; `sudo` is never used and root-only probes
   (`powermetrics`, `/var/vm`, system-wide `fs_usage`) stay out of product.
-- **History guide** — README §12: TIER column, em-dash for unmeasured cells,
+- **History guide** — Manual §12: TIER column, em-dash for unmeasured cells,
   `history --full-only` for comparable STATE/SMART trends.
 
 ---

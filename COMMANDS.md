@@ -3,7 +3,7 @@
 This is the **full operator manual**: workflows, every command, clean targets,
 tiers, agents, config, and troubleshooting for the command line itself.
 
-**New here?** Start with the narrative guide: **[README.md](README.md)**  
+**New here?** Start at the [front page](README.md); the narrative guide is **[the Manual](docs/MANUAL.md)**  
 (why it exists, first 10 minutes, how to read a report).
 
 ---
@@ -198,7 +198,7 @@ wtfssd scan --bulk-state
 | Other users’ homes | privacy / permissions |
 | API token *cost* tracking | different product |
 
-Full narrative: [README §11](README.md#11-how-thorough-is-a-scan-coverage--no-sudo).
+Full narrative: [Manual §11](docs/MANUAL.md#11-how-thorough-is-a-scan-coverage--no-sudo).
 
 ---
 
@@ -246,7 +246,7 @@ Read it with its limits in mind:
 - **No file paths.** Per-file attribution needs root tracing
   (`fs_usage`) and stays out of product.
 
-Full claims/non-claims table: README §11.
+Full claims/non-claims table: [Manual §11](docs/MANUAL.md#11-how-thorough-is-a-scan-coverage--no-sudo).
 
 ---
 
@@ -579,7 +579,7 @@ wtfssd scan --json --no-history > /tmp/out.json
 
 ### Still stuck
 
-1. Re-read [README troubleshooting](README.md#12-troubleshooting)  
+1. Re-read [Manual troubleshooting](docs/MANUAL.md#14-troubleshooting)  
 2. Run `wtfssd scan --json` and inspect `findings`  
 3. Open a GitHub issue with OS version, `python3 --version`, and the error  
 
@@ -622,7 +622,8 @@ in the same change.
 
 | Doc | Role |
 |-----|------|
-| [README.md](README.md) | Why + idiot-proof first hour + troubleshooting story |
+| [README.md](README.md) | Front page: install, quickstart, feature map |
+| [The Manual](docs/MANUAL.md) | Why + idiot-proof first hour + troubleshooting story |
 | [AGENTS.md](AGENTS.md) | Repo map for coding agents |
 | [docs/superpowers/specs/2026-08-02-resource-ethical-v2.md](docs/superpowers/specs/2026-08-02-resource-ethical-v2.md) | Current product rules (tiers, agents, CLI-only) |
 | [IDEA-SSD.txt](IDEA-SSD.txt) | Source article thesis |

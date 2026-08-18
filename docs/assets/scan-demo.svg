@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 548" width="760" height="548" role="img" aria-label="wtfssd scan terminal output">
+  <defs>
+    <clipPath id="window"><rect x="0" y="0" width="760" height="548" rx="12"/></clipPath>
+  </defs>
+  <g clip-path="url(#window)">
+    <rect width="760" height="548" fill="#0d1117"/>
+    <rect width="760" height="40" fill="#161b22"/>
+    <circle cx="24" cy="20" r="6.5" fill="#ff5f57"/>
+    <circle cx="46" cy="20" r="6.5" fill="#febc2e"/>
+    <circle cx="68" cy="20" r="6.5" fill="#28c840"/>
+    <text x="380" y="25" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#8b949e">wtfssd scan — Terminal</text>
+    <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13" xml:space="preserve">
+      <text x="24" y="72"><tspan fill="#7ee787">$</tspan><tspan fill="#e6edf3"> wtfssd scan</tspan></text>
+      <text x="24" y="112" fill="#79c0ff" font-weight="bold">== SSD / SMART ==</text>
+      <text x="24" y="132"><tspan fill="#e6edf3">  APPLE SSD AP1024Z · health </tspan><tspan fill="#7ee787" font-weight="bold">PASSED</tspan></text>
+      <text x="24" y="152" fill="#e6edf3">  lifetime writes 20.2 TB · wear used 2% · media errors 0</text>
+      <text x="24" y="192" fill="#79c0ff" font-weight="bold">== MEMORY / SWAP ==</text>
+      <text x="24" y="212"><tspan fill="#e6edf3">  swap: </tspan><tspan fill="#7ee787">0.0 GB used</tspan><tspan fill="#e6edf3"> of 64 GB RAM — no thrash</tspan></text>
+      <text x="24" y="252" fill="#79c0ff" font-weight="bold">== TOP DISK WRITERS ==</text>
+      <text x="24" y="272"><tspan fill="#e6edf3">     76.3 GB  </tspan><tspan fill="#ffa657">fileproviderd</tspan><tspan fill="#8b949e"> (over 93.4 h alive)</tspan></text>
+      <text x="24" y="292"><tspan fill="#e6edf3">     41.3 GB  </tspan><tspan fill="#ffa657">cloudd</tspan><tspan fill="#8b949e"> (over 93.4 h alive)</tspan></text>
+      <text x="24" y="312"><tspan fill="#e6edf3">     11.0 GB  </tspan><tspan fill="#ffa657">Claude</tspan><tspan fill="#8b949e"> (over 0.1 h alive)</tspan></text>
+      <text x="24" y="332" fill="#8b949e">  note: live processes only — exited processes took their counters</text>
+      <text x="24" y="372" fill="#79c0ff" font-weight="bold">== FINDINGS ==</text>
+      <text x="24" y="392"><tspan fill="#e3b341" font-weight="bold">  [WARN]</tspan><tspan fill="#e6edf3"> High write volume: ~379 GB/day</tspan></text>
+      <text x="24" y="412" fill="#8b949e">      Swap is low (0.0 GB), so this is not swap thrash — look at</text>
+      <text x="24" y="432" fill="#8b949e">      agent/tool state churn, cloud-sync daemons, and indexers.</text>
+      <text x="24" y="452"><tspan fill="#e3b341" font-weight="bold">  [WARN]</tspan><tspan fill="#e6edf3"> 50 IDE-related processes running</tspan></text>
+      <text x="24" y="472" fill="#8b949e">      Top: Claude Helper (Plugin) ×20, disclaimer ×20</text>
+      <text x="24" y="512"><tspan fill="#e6edf3">Health: </tspan><tspan fill="#e3b341" font-weight="bold">60/100 (C)</tspan></text>
+    </g>
+  </g>
+</svg>
