@@ -56,6 +56,26 @@ class TestReport(unittest.TestCase):
         self.assertIn("unavailable", text.lower())
         self.assertIn("100/100", text)
 
+    def test_text_shows_top_writers_when_available(self):
+        rep, findings = sample()
+        rep.writers = models.WritersReport(
+            available=True,
+            top=[models.WriterProc(
+                pid=312, name="/System/Library/CoreServices/fileproviderd",
+                written_bytes=76_300_000_000, elapsed_seconds=3 * 86400)],
+            visible_total_bytes=80_000_000_000, process_count=5)
+        text = report.render_text(rep, findings)
+        self.assertIn("TOP DISK WRITERS", text)
+        self.assertIn("fileproviderd", text)
+        self.assertIn("76.3 GB", text)
+        # the honest caveat: attribution only sees live processes
+        self.assertIn("exited", text)
+
+    def test_text_omits_writers_when_unavailable(self):
+        rep, findings = sample()
+        text = report.render_text(rep, findings)
+        self.assertNotIn("TOP DISK WRITERS", text)
+
     def test_json_roundtrips(self):
         rep, findings = sample()
         data = json.loads(report.render_json(rep, findings))

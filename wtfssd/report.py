@@ -84,6 +84,20 @@ def render_text(report: HealthReport, findings: list[Finding]) -> str:
         lines.append("  no ghost processes")
     lines.append("")
 
+    w = report.writers
+    if w.available and w.top:
+        lines.append("== TOP DISK WRITERS ==")
+        for proc in w.top:
+            name = proc.name.rsplit("/", 1)[-1]
+            hours = proc.elapsed_seconds / 3600
+            lines.append(f"  {format_bytes(proc.written_bytes):>10}  "
+                         f"{name} (over {hours:.1f} h alive)")
+        lines.append(f"  {format_bytes(w.visible_total_bytes):>10}  "
+                     f"visible total across {w.process_count} processes")
+        lines.append("  note: live processes only — exited processes took "
+                     "their write counters with them")
+        lines.append("")
+
     lines.append("== AGENTIC STATE ==")
     if report.statedirs.note and not report.statedirs.dirs:
         lines.append(f"  note: {report.statedirs.note}")

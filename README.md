@@ -174,7 +174,7 @@ wtfssd scan
 
 Wait a few seconds (full scan often ~2–6 seconds). You get:
 
-- Drive / storage / memory / process / state sections  
+- Drive / storage / memory / process / top-disk-writers / state sections  
 - A list of **findings** (WARN / CRITICAL / INFO)  
 - A **health score** 0–100 and letter grade  
 
@@ -282,6 +282,23 @@ Each domain is `ok` / `warn` / `critical` / `unknown`:
 | Free space low | Headroom floor breached | Clean + empty Trash; aim for ~15–25% free |
 | Backup destination missing | Time Machine disk unplugged | Plug it in or fix TM settings |
 | Retention missing | Tools don’t auto-expire chat/state | Set cleanup days in Claude/Cursor settings if available |
+| High write volume **and** swap low | Not thrash — state churn, cloud sync, or indexers | Read the `TOP DISK WRITERS` section; `wtfssd clean` dry-run; `optimize ignore` |
+| Many IDE processes but you “only use Terminal” | One Electron app in agent mode ≈ 40+ helpers | The finding names the top families (e.g. `Claude Helper (Plugin) ×20`) — Cmd+Q that app |
+
+### Top disk writers (who is writing)
+
+Full scan prints a `TOP DISK WRITERS` section: live processes ranked by
+**cumulative** bytes written since each one started. Three reading rules:
+
+1. **Cumulative ≠ rate.** Divide by the "alive" hours shown — 76 GB over
+   4 days is background hum; 11 GB over 8 minutes is a download or a storm.
+2. **Live processes only.** Exited agent sessions are invisible — the
+   "visible total" line is a floor, not the machine's total.
+3. **Suspects, not verdicts.** A sync daemon near the top usually means
+   *something it syncs* is churning (e.g. agents writing into an
+   iCloud-synced Desktop) — fix the churn, not the daemon.
+
+Full capability/limits table: [§11](#11-how-thorough-is-a-scan-coverage--no-sudo).
 
 ### SMART in one sentence
 
@@ -466,7 +483,51 @@ rather than half-implemented behind a password.
 | **gitwatch** | `git status` on **configured** repos only | Uncommitted / unpushed work |
 | **secrets** | Only if `secrets.enabled: true` | Path/line/rule hits — never values |
 | **writerate** | `iostat` (~1 s sample) | Live write MB/s |
+| **writers** | `ps` + libproc rusage (Activity Monitor's source) | Which live processes wrote the most bytes (exited processes are invisible — stated in the report) |
 | **external SMART** | Only if you list devices in config | External drive health |
+
+### Who is writing? (`writers` — claims and non-claims)
+
+Full scan ranks **live** processes by cumulative disk bytes written and
+prints the top of the list:
+
+```text
+== TOP DISK WRITERS ==
+     76.3 GB  fileproviderd (over 93.4 h alive)
+     41.3 GB  cloudd (over 93.4 h alive)
+      5.2 GB  com.apple.WebKit.Networking (over 93.4 h alive)
+    150.4 GB  visible total across 260 processes
+  note: live processes only — exited processes took their write counters with them
+```
+
+**Where the numbers come from.** The macOS kernel keeps a lifetime
+bytes-written counter for every running process, whether or not anyone
+looks at it. Activity Monitor's "Bytes Written" column is a read-out of
+that counter; wtfssd reads the very same one (`proc_pid_rusage` via
+libproc), once per process, at scan time. Nothing is traced, sampled,
+or watched over time — the tool asks for bookkeeping the kernel already
+does. No sudo, ever; processes it may not read are skipped silently.
+
+**Cost honesty** (measured on the development machine, M5 Pro, ~260
+processes): about **40 ms** per full scan, about **0.5 MB** of memory
+while collecting (freed when the scan ends), about **1.5 KB** added to
+each full-scan history row. It does not run on `--micro` or `--fast`,
+does not write to the metrics database, and never runs on its own in
+the background.
+
+| It CAN tell you | It CANNOT tell you |
+|---|---|
+| Which live processes wrote the most since each one started | Anything about processes that already **exited** — every finished agent/CLI session takes its counter with it |
+| That a cloud-sync daemon, Electron app, or indexer is a heavy writer | Writers it lacks permission to read (root/system daemons) — skipped, not estimated |
+| A **floor** for attribution (the "visible total" line) | The full accounting of SMART's TB-written — the gap between them is exited + unreadable processes, and on agentic machines that gap is often most of the story |
+| Host-level bytes the drive was asked to write | Physical NAND writes after write amplification — only SMART wear % knows that |
+| Cumulative bytes plus process age, so you can judge pace | A live **rate** — 76 GB over 4 days is calm; 11 GB over 8 minutes is a storm. Divide by the "alive" hours shown |
+| | **Which files or folders** received the writes — per-path attribution needs root tracing (`fs_usage`), which stays out of product |
+
+**Rule of reading:** the list names *suspects*, not the whole crime. If
+the visible total is far below what SMART says was written this boot,
+the writes came mostly from short-lived processes — on vibe-coding
+machines, usually the agent sessions themselves.
 
 ### What `--bulk-state` adds
 
@@ -529,6 +590,7 @@ with “don’t become the workload.”
 |-------|--------|
 | SSD wear (if smartmontools works) | Yes — drive’s own SMART |
 | Swap / free space / IDE ghosts / AI state sizes | Yes — full scan |
+| Which **live** processes wrote the most bytes | Yes — kernel counters; a floor, since exited processes are excluded |
 | Biggest non-AI disk hogs | Yes — with `--bulk-state` or `headroom` |
 | Everything a root admin could measure | **No** — and we won’t pretend otherwise |
 | That missing root checks hide “dying SSD” | Unlikely — SMART + free space + swap cover the article’s failure modes |
@@ -558,6 +620,9 @@ wtfssd history --last 30
    bulk / AI-core), not only that files grew overnight.  
 4. New scans after the history update store real `scan_tier` so labels stop
    needing `?`.
+5. `TOP DISK WRITERS` is a per-scan snapshot, **not** a trend — each history
+   row stores that scan's top list, and `history` does not (yet) chart a
+   process's writes across days. Compare rows by eye if you need that today.
 
 ---
 

@@ -9,7 +9,7 @@ Authoritative package: `wtfssd/` (console script `wtfssd`; legacy alias
 `ssdwtf`). Operator docs: **`README.md`** (intro) + **`COMMANDS.md`**
 (workflows & flags — keep these consistent with `cli.py`). Design:
 `docs/superpowers/specs/` (resource-ethical v2 wins on tiers/agents/CLI-only).
-Tests: `tests/` (**225** cases). Remote: `https://github.com/ogprotege/wtfssd.git`.
+Tests: `tests/` (**240** cases). Remote: `https://github.com/ogprotege/wtfssd.git`.
 
 ## Project overview
 
@@ -52,7 +52,7 @@ Windows/Linux, **any `sudo` / root requirement**. (`menubar/` and
   `smart.external_devices`).
 - **Tier ladder:** `micro` (swap/disk/procs/pressure) → `fast` (+ SMART and
   cheap signals) → `full` (+ statedirs, apfs, crashes, churn, fds, logs,
-  writerate, …) → `full` + `--bulk-state` (heavy non-AI trees).
+  writerate, writers, …) → `full` + `--bulk-state` (heavy non-AI trees).
 - Operator narrative: **README §11** and **COMMANDS.md** “How thorough…”.
   Keep those docs in sync when adding collectors.
 
@@ -119,6 +119,7 @@ wtfssd/
     backup.py            # tmutil destinationinfo/latestbackup → BackupReport (Time Machine readiness)
     crashes.py           # DiagnosticReports per watched app, trailing 7 days → CrashReport
     writerate.py         # iostat -d current-interval MB/s → WriteRateReport
+    writers.py           # ps + libproc proc_pid_rusage per-process bytes written → WritersReport
     smartext.py          # SMART for external drives, bridge protocols in order → SmartReport
     churn.py             # .pack snapshot create/destroy turnover vs stored baseline → ChurnReport
     fds.py               # lsof -nP per-PID open-fd counts → FdsReport
@@ -183,13 +184,18 @@ These are contractual, from the implementation plan's global constraints:
 - Collector parsers are tested against captured real command output in
   `tests/fixtures/` (`smartctl.txt`, `sysctl_swap.txt`, `df.txt`, `ps.txt`),
   injected via fake `runner` callables — tests must never shell out to the
-  real system.
+  real system. `collectors/writers.py` additionally takes an injectable
+  `rusage_fn` (pid → bytes-written), so tests never dlopen libproc.
 - Filesystem-touching tests (cleaners, optimize, history, config) run against
   `tempfile.TemporaryDirectory` and fakes; `cli` tests use `unittest.mock` to
   patch `build_report`, `analyze`, history, and config paths.
-- The suite is **225 tests, all passing** (resource-ethical v2: allow-list
-  tiers, growth gates, AI/bulk statedirs, single LaunchAgent, CLI-only).
-  Operator docs: `README.md` + `COMMANDS.md`.
+- The suite is **240 tests, all passing** (resource-ethical v2: allow-list
+  tiers, growth gates, AI/bulk statedirs, single LaunchAgent, CLI-only,
+  writers attribution). Operator docs: `README.md` + `COMMANDS.md`.
+- Tests that exercise wall-clock windows (`metrics.series`,
+  `analyze._swap_rate_gb_day`, `history.state_growth_gb_per_day`) must build
+  timestamps relative to `datetime.now()` — absolute dates rot into
+  time-bomb failures once the window slides past them.
 
 ## Configuration and runtime state
 
@@ -204,8 +210,8 @@ These are contractual, from the implementation plan's global constraints:
   `watch.agent_mode` (`hourly` default | `fast` | `both` | `none`),
   `projects` (dirs scanned for stale `node_modules`),
   `tiers.micro`/`tiers.fast`/`tiers.full` (collector **allow-lists** for
-  `--micro` / `--fast` / full; writerate only on full; statedirs AI-core on
-  full, bulk via `--bulk-state`), `backup.enabled`/`backup.warn_hours`/
+  `--micro` / `--fast` / full; writerate and writers only on full;
+  statedirs AI-core on full, bulk via `--bulk-state`), `backup.enabled`/`backup.warn_hours`/
   `backup.crit_hours`, `apfs.snapshot_warn_days`, `pressure.sustained_min`,
   `crashes.warn_weekly`/`crashes.apps`, `thermal.warn_below`,
   `uptime.warn_days`, `writerate.warn_mb_s`, `battery.capacity_info_pct`,

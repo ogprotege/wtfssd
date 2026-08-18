@@ -130,6 +130,28 @@ class WriteRateReport:
 
 
 @dataclass
+class WriterProc:
+    """One process's cumulative disk writes (proc_pid_rusage, no root)."""
+    pid: int
+    name: str              # full command path from ps comm
+    written_bytes: int     # cumulative since the process started
+    elapsed_seconds: int   # process age, for rate context
+
+
+@dataclass
+class WritersReport:
+    """Per-process write attribution. Only LIVE processes are visible —
+    exited processes take their counters with them, so visible_total_bytes
+    is a floor, not the machine's total."""
+    available: bool
+    error: Optional[str] = None
+    top: list[WriterProc] = field(default_factory=list)
+    visible_total_bytes: int = 0
+    process_count: int = 0
+    note: Optional[str] = None
+
+
+@dataclass
 class ChurnReport:
     available: bool
     error: Optional[str] = None
@@ -277,6 +299,7 @@ class HealthReport:
     spotlight: SpotlightReport = field(default_factory=lambda: SpotlightReport(available=False))
     logs: LogsReport = field(default_factory=lambda: LogsReport(available=False))
     gitwatch: GitWatchReport = field(default_factory=lambda: GitWatchReport(available=False))
+    writers: WritersReport = field(default_factory=lambda: WritersReport(available=False))
     # Recorded so history can tell full vs fast/micro and bulk vs AI-core.
     # None = legacy history row (infer at display time from statedirs/smart).
     scan_tier: Optional[str] = None   # "micro" | "fast" | "full" | None
@@ -357,6 +380,7 @@ def report_from_dict(d: dict[str, Any]) -> HealthReport:
         spotlight=_sub(SpotlightReport, "spotlight"),
         logs=_sublist(LogsReport, StateDir, "logs", "top"),
         gitwatch=_sublist(GitWatchReport, RepoStatus, "gitwatch", "repos"),
+        writers=_sublist(WritersReport, WriterProc, "writers", "top"),
         scan_tier=tier,
         bulk_state=bool(d.get("bulk_state", False)),
     )

@@ -1,9 +1,22 @@
 from __future__ import annotations
 
 import unittest
+from datetime import datetime, timedelta
 
 from wtfssd import analyze, models
 from wtfssd.config import DEFAULTS
+
+
+def _write_heavy_history() -> list[models.HealthReport]:
+    """~410 GB/day of SMART writes (span-based math — absolute dates are fine)."""
+    h = []
+    for i, ts in enumerate(["2026-07-13T10:00:00", "2026-07-14T10:00:00",
+                            "2026-07-15T10:00:00"]):
+        r = base_report()
+        r.timestamp = ts
+        r.smart.data_units_written = 100_000_000 + i * 800_000
+        h.append(r)
+    return h
 
 
 def base_report() -> models.HealthReport:
@@ -98,14 +111,62 @@ class TestAnalyze(unittest.TestCase):
 
     def test_write_rate_from_history(self):
         rep = base_report()
-        h = []
-        for i, ts in enumerate(["2026-07-13T10:00:00", "2026-07-14T10:00:00",
-                                "2026-07-15T10:00:00"]):
-            r = base_report()
-            r.timestamp = ts
-            r.smart.data_units_written = 100_000_000 + i * 800_000  # ~410 GB/day
-            h.append(r)
+        h = _write_heavy_history()
         self.assertIn("smart.write_rate", codes(analyze.analyze(rep, h, DEFAULTS)))
+
+    def test_write_rate_blames_swap_only_when_swap_is_high(self):
+        rep = base_report()
+        rep.swap.used_mb = 9 * 1024  # above swap.warn_gb
+        findings = analyze.analyze(rep, _write_heavy_history(), DEFAULTS)
+        f = next(f for f in findings if f.code == "smart.write_rate")
+        self.assertIn("usually swap thrash", f.detail)
+        self.assertNotIn("not swap thrash", f.detail)
+
+    def test_write_rate_rules_out_swap_when_swap_is_low(self):
+        rep = base_report()  # base swap: 0.0 MB used — measured and low
+        findings = analyze.analyze(rep, _write_heavy_history(), DEFAULTS)
+        f = next(f for f in findings if f.code == "smart.write_rate")
+        self.assertIn("not swap thrash", f.detail)
+        self.assertIn("state churn", f.detail)
+
+    def test_write_rate_keeps_swap_wording_when_swap_unknown(self):
+        rep = base_report()
+        rep.swap = None  # sysctl failed — cannot rule swap in or out
+        findings = analyze.analyze(rep, _write_heavy_history(), DEFAULTS)
+        f = next(f for f in findings if f.code == "smart.write_rate")
+        self.assertIn("usually swap thrash", f.detail)
+
+    def test_write_rate_names_top_writer_when_attribution_available(self):
+        rep = base_report()  # swap low → churn wording + writer attribution
+        rep.writers = models.WritersReport(
+            available=True,
+            top=[models.WriterProc(
+                pid=9, name="/System/Library/CoreServices/fileproviderd",
+                written_bytes=76_300_000_000, elapsed_seconds=3600)],
+            visible_total_bytes=80_000_000_000, process_count=4)
+        findings = analyze.analyze(rep, _write_heavy_history(), DEFAULTS)
+        f = next(f for f in findings if f.code == "smart.write_rate")
+        self.assertIn("fileproviderd", f.detail)
+        self.assertIn("76.3 GB", f.detail)
+
+    def test_procs_many_names_top_offenders(self):
+        rep = base_report()
+        helper = ("/Applications/Claude.app/Contents/Frameworks/"
+                  "Claude Helper (Renderer).app/Contents/MacOS/"
+                  "Claude Helper (Renderer)")
+        cli = "/Users/u/.local/bin/claude"
+        procs = ([models.GhostProcess(pid=i, ppid=1, name=helper,
+                                      age_seconds=60, rss_mb=100.0)
+                  for i in range(15)]
+                 + [models.GhostProcess(pid=100 + i, ppid=1, name=cli,
+                                        age_seconds=60, rss_mb=50.0)
+                    for i in range(10)])
+        rep.processes = models.ProcessReport(
+            ghosts=[], total_ide_processes=25, ide_procs=procs)
+        findings = analyze.analyze(rep, [], DEFAULTS)
+        f = next(f for f in findings if f.code == "procs.many")
+        self.assertIn("Claude Helper (Renderer) ×15", f.detail)
+        self.assertIn("claude ×10", f.detail)
 
     def test_monthly_check_on_first(self):
         rep = base_report()
@@ -223,10 +284,12 @@ class TestPhase1Findings(unittest.TestCase):
                                              free_pct=15.0)
         rep.system = models.SystemReport(available=True, uptime_days=20.0)
         history = []
-        for i, ts in enumerate(["2026-07-28T10:00:00", "2026-07-29T10:00:00",
-                                "2026-07-30T10:00:00"]):
+        # relative timestamps: _swap_rate_gb_day fits only a trailing
+        # wall-clock window, so absolute dates rot into time-bomb failures
+        for i, days_ago in enumerate((2, 1, 0)):
             h = _base_report()
-            h.timestamp = ts
+            h.timestamp = (datetime.now() - timedelta(days=days_ago)
+                           ).isoformat(timespec="seconds")
             h.swap = models.SwapReport(total_mb=16384.0,
                                        used_mb=(6 + i) * 1024, free_mb=0.0)
             history.append(h)

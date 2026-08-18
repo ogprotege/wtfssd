@@ -10,6 +10,32 @@ The package version remains **0.1.0** until a formal release cut.
 
 ## [Unreleased]
 
+### Added
+
+- **Top disk writers collector** (`collectors/writers.py`) — per-process
+  cumulative bytes written via `ps` + libproc `proc_pid_rusage` (the same
+  root-free source as Activity Monitor's "Bytes Written" column). Full tier
+  only. New `== TOP DISK WRITERS ==` report section states the honest
+  caveat: live processes only — exited processes take their counters away.
+
+### Changed
+
+- **`smart.write_rate` cross-references swap** — when swap is measured and
+  low, the finding no longer blames "swap thrash"; it points at state churn,
+  cloud-sync daemons, and indexers, and names the top visible writer when
+  attribution is available.
+- **`procs.many` names its offenders** — the IDE-process warning now lists
+  the top process families by count (e.g. `Claude Helper (Plugin) ×20`), so
+  the number is explainable after the helper tree exits.
+
+### Fixed
+
+- **Time-bomb tests** — `test_metrics` and the `memory.thrash_hint` test in
+  `test_analyze` hard-coded July timestamps against wall-clock windows
+  (`metrics.series` 7-day cutoff, `_swap_rate_gb_day` 14-day window) and
+  began failing in August. Tests now build timestamps relative to now;
+  AGENTS.md records the rule. Suite: 240 tests.
+
 ### Documentation
 
 - **Scan thoroughness / no-sudo boundary** — README §11, COMMANDS, AGENTS.md,

@@ -2,12 +2,20 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from wtfssd import metrics, models
 from wtfssd.models import (ApfsReport, DiskReport, HealthReport, ProcessReport,
                            SmartReport, StateDir, StateDirReport, SwapReport,
                            make_empty_report)
+
+
+def _ts(days_ago: float) -> str:
+    """Timestamps must be relative to now: series()/rate_per_day() filter on a
+    wall-clock window, so absolute dates rot into time-bomb failures."""
+    return (datetime.now() - timedelta(days=days_ago)).isoformat(
+        timespec="seconds")
 
 
 def _report(ts: str, swap_mb: float) -> HealthReport:
@@ -29,8 +37,8 @@ class TestMetrics(unittest.TestCase):
     def test_record_and_series_roundtrip(self):
         with tempfile.TemporaryDirectory() as td:
             db = Path(td) / "m.db"
-            metrics.record(_report("2026-07-29T10:00:00", 512.0), path=db)
-            metrics.record(_report("2026-07-30T10:00:00", 1024.0), path=db)
+            metrics.record(_report(_ts(2), 512.0), path=db)
+            metrics.record(_report(_ts(1), 1024.0), path=db)
             vals = metrics.series("swap.used_gb", days=7, path=db)
             self.assertEqual(len(vals), 2)
             self.assertAlmostEqual(vals[-1][1], 1.0)
@@ -38,8 +46,8 @@ class TestMetrics(unittest.TestCase):
     def test_rate_per_day(self):
         with tempfile.TemporaryDirectory() as td:
             db = Path(td) / "m.db"
-            metrics.record(_report("2026-07-28T10:00:00", 0.0), path=db)
-            metrics.record(_report("2026-07-30T10:00:00", 2048.0), path=db)
+            metrics.record(_report(_ts(2), 0.0), path=db)
+            metrics.record(_report(_ts(0), 2048.0), path=db)
             rate = metrics.rate_per_day("swap.used_gb", days=7, path=db)
             self.assertIsNotNone(rate)
             self.assertAlmostEqual(rate, 1.0, places=5)  # 2 GB over 2 days
@@ -48,13 +56,13 @@ class TestMetrics(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             db = Path(td) / "m.db"
             self.assertIsNone(metrics.rate_per_day("swap.used_gb", 7, path=db))
-            metrics.record(_report("2026-07-30T10:00:00", 512.0), path=db)
+            metrics.record(_report(_ts(0), 512.0), path=db)
             self.assertIsNone(metrics.rate_per_day("swap.used_gb", 7, path=db))
 
     def test_unavailable_sources_record_nothing(self):
         with tempfile.TemporaryDirectory() as td:
             db = Path(td) / "m.db"
-            rep = make_empty_report("2026-07-30T10:00:00", 64.0)
+            rep = make_empty_report(_ts(0), 64.0)
             metrics.record(rep, path=db)  # everything unavailable/None
             self.assertEqual(metrics.series("smart.percent_used", 7, path=db), [])
             self.assertIsNone(metrics.latest("smart.percent_used", path=db))
@@ -62,7 +70,7 @@ class TestMetrics(unittest.TestCase):
     def test_apfs_error_records_no_snapshot_count(self):
         with tempfile.TemporaryDirectory() as td:
             db = Path(td) / "m.db"
-            rep = _report("2026-07-30T10:00:00", 512.0)
+            rep = _report(_ts(0), 512.0)
             rep.apfs = ApfsReport(available=True,
                                   error="tmutil listlocalsnapshots failed",
                                   container_free_gb=412.6)
@@ -75,13 +83,13 @@ class TestMetrics(unittest.TestCase):
                 metrics.latest("apfs.container_free_gb", path=db), 412.6)
 
     def test_record_never_raises_on_bad_path(self):
-        rep = _report("2026-07-30T10:00:00", 512.0)
+        rep = _report(_ts(0), 512.0)
         metrics.record(rep, path=Path("/nonexistent-dir-x/m.db"))  # no raise
 
     def test_phase2_metrics_extract(self):
         with tempfile.TemporaryDirectory() as td:
             db = Path(td) / "m.db"
-            rep = _report("2026-07-30T10:00:00", 512.0)
+            rep = _report(_ts(0), 512.0)
             rep.churn = models.ChurnReport(available=True, added=3, removed=2)
             rep.logs = models.LogsReport(available=True,
                                          total_bytes=int(2.5e9))
