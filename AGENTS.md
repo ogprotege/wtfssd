@@ -265,3 +265,24 @@ them in any change to `cleaners.py`:
   manual live runs (`python3 -m wtfssd scan`) on macOS.
 - Git: `origin` points at `https://github.com/ogprotege/wtfssd.git`. Do not
   commit or push unless explicitly asked.
+
+## Cursor Cloud specific instructions
+
+The Cloud Agent VM is **Linux**, but `wtfssd` targets **macOS**. This is not a
+setup failure — it is the tool's honesty contract in action:
+
+- Nothing to install beyond Python ≥ 3.10 (stdlib only). `pip install -e .` is
+  the only setup step and just exposes the `wtfssd`/`ssdwtf` console scripts;
+  it is optional because the primary dev entrypoint is `python3 -m wtfssd`
+  from the repo root.
+- The console scripts land in `~/.local/bin` (added to `~/.bashrc` PATH during
+  setup). If `wtfssd` is "command not found", run `python3 -m wtfssd …`
+  instead, or use the full path — no reinstall needed.
+- On Linux, macOS-only collectors (`smartctl`, `sysctl vm.swapusage`,
+  `df` on the APFS mount, `diskutil`, `tmutil`, `iostat`, `pmset`, `ioreg`, …)
+  report `unavailable`/`unknown`. `scan`/`clean`/`history`/`optimize` still run
+  and `scan` still exits `0` with a coherent report — expected, not a bug.
+  Live-system findings cannot be reproduced here; **the 274-test unittest suite
+  (fixture-driven) is the real signal** for behavior changes.
+- Lint: there is no dedicated linter. Use the unittest suite plus
+  `python3 -m compileall wtfssd tests` as a byte-compile sanity check.
