@@ -41,6 +41,23 @@ def parse_smartctl(text: str) -> SmartReport:
     return rep
 
 
+def _has_smart_data(report: SmartReport) -> bool:
+    numeric = (
+        report.percent_used,
+        report.available_spare,
+        report.media_errors,
+        report.power_on_hours,
+        report.data_units_written,
+        report.tb_written,
+        report.critical_warning,
+        report.spare_threshold,
+        report.unsafe_shutdowns,
+        report.temperature_c,
+    )
+    return bool(report.model or report.health
+                or any(value is not None for value in numeric))
+
+
 def collect_smart(device: str = "/dev/disk0",
                   runner: Callable = run_cmd) -> SmartReport:
     text = runner(["smartctl", "-a", device])
@@ -49,4 +66,10 @@ def collect_smart(device: str = "/dev/disk0",
             available=False,
             error=f"smartctl failed for {device} (not installed? brew install smartmontools)",
         )
-    return parse_smartctl(text)
+    report = parse_smartctl(text)
+    if not _has_smart_data(report):
+        return SmartReport(
+            available=False,
+            error=f"smartctl returned no parseable SMART data for {device}",
+        )
+    return report

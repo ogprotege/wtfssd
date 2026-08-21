@@ -17,6 +17,17 @@ def app_from_filename(name: str) -> Optional[str]:
     return m.group(1) if m else None
 
 
+def _canonical_app(app: str, watched: dict[str, str]) -> Optional[str]:
+    name = app.casefold()
+    exact = watched.get(name)
+    if exact is not None:
+        return exact
+    for prefix in sorted(watched, key=len, reverse=True):
+        if name.startswith(f"{prefix} "):
+            return watched[prefix]
+    return None
+
+
 def collect_crashes(apps: list[str], dir: Optional[Path] = None,
                     now: Optional[float] = None) -> CrashReport:
     """Count DiagnosticReports per watched app over the trailing 7 days.
@@ -26,7 +37,7 @@ def collect_crashes(apps: list[str], dir: Optional[Path] = None,
     weekly: dict[str, int] = {a: 0 for a in apps}
     if not reports_dir.is_dir():
         return CrashReport(available=True, weekly=weekly, total_weekly=0)
-    watched = {a.lower(): a for a in apps}
+    watched = {a.casefold(): a for a in apps}
     try:
         entries = list(reports_dir.iterdir())
     except OSError as exc:
@@ -35,7 +46,7 @@ def collect_crashes(apps: list[str], dir: Optional[Path] = None,
         app = app_from_filename(entry.name)
         if app is None:
             continue
-        canonical = watched.get(app.lower())
+        canonical = _canonical_app(app, watched)
         if canonical is None:
             continue
         try:

@@ -9,10 +9,12 @@ _MDS_NAMES = ("mds_stores", "mdworker")
 
 
 def parse_mdutil(text: str) -> Optional[bool]:
-    if "Indexing enabled" in text:
-        return True
-    if "Indexing disabled" in text:
+    status = text.casefold()
+    if ("indexing disabled" in status
+            or "indexing and searching disabled" in status):
         return False
+    if "indexing enabled" in status:
+        return True
     return None
 
 
