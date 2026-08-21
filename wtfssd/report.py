@@ -39,8 +39,11 @@ def render_text(report: HealthReport, findings: list[Finding]) -> str:
     lines.append("== SSD / SMART ==")
     smart = report.smart
     if not smart.available:
-        lines.append(f"  unavailable: {smart.error or 'unknown error'}")
-        lines.append("  install smartmontools: brew install smartmontools")
+        if (smart.error or "").startswith("not collected (tier="):
+            lines.append(f"  {smart.error}")
+        else:
+            lines.append(f"  unavailable: {smart.error or 'unknown error'}")
+            lines.append("  install smartmontools: brew install smartmontools")
     else:
         lines.append(f"  {smart.model or 'unknown drive'} · health {smart.health or '?'}")
         pct = f"{smart.percent_used}%" if smart.percent_used is not None else "?"
@@ -102,15 +105,16 @@ def render_text(report: HealthReport, findings: list[Finding]) -> str:
     lines.append("== AGENTIC STATE ==")
     if report.statedirs.note and not report.statedirs.dirs:
         lines.append(f"  note: {report.statedirs.note}")
-    for d in report.statedirs.dirs:
-        if d.exists:
-            lines.append(f"  {format_bytes(d.size_bytes):>10}  {d.key} — {d.note}")
-    lines.append(f"  {format_bytes(report.statedirs.total_bytes):>10}  TOTAL")
+    else:
+        for d in report.statedirs.dirs:
+            if d.exists:
+                lines.append(f"  {format_bytes(d.size_bytes):>10}  {d.key} — {d.note}")
+        lines.append(f"  {format_bytes(report.statedirs.total_bytes):>10}  TOTAL")
     lines.append("")
 
     lines.append("== FINDINGS ==")
     if not findings:
-        lines.append("  none — machine looks healthy")
+        lines.append("  none in collected data")
     order = {"critical": 0, "warn": 1, "info": 2}
     for f in sorted(findings, key=lambda f: order.get(f.severity, 3)):
         ev = f" (evidence: {f.evidence})" if f.evidence != "measured" else ""
