@@ -54,6 +54,12 @@ class TestCollectSmart(unittest.TestCase):
         self.assertFalse(rep.available)
         self.assertIsNotNone(rep.error)
 
+    def test_error_only_stdout_degrades(self):
+        rep = smart.collect_smart(runner=fake_runner(
+            "smartctl: Unable to detect device type\n"))
+        self.assertFalse(rep.available)
+        self.assertIsNotNone(rep.error)
+
 
 if __name__ == "__main__":
     unittest.main()

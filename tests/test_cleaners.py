@@ -87,6 +87,7 @@ class TestCleanTarget(unittest.TestCase):
         res = cleaners.clean_target("cursor-caches", home=home, config=DEFAULTS,
                                     apply=True, runner=app_running)
         self.assertIsNotNone(res.skipped_reason)
+        self.assertFalse(res.applied)
         self.assertTrue(f.exists())
         # --force overrides
         res2 = cleaners.clean_target("cursor-caches", home=home, config=DEFAULTS,
@@ -124,6 +125,16 @@ class TestCleanTarget(unittest.TestCase):
         self.assertEqual(names, {"app11", "app10", "app9"})
         home._td.cleanup()
 
+    def test_invalid_cache_limit_uses_default(self):
+        home = make_home()
+        put(home, "Library/Caches/example/blob", 100)
+        cfg = dict(DEFAULTS)
+        cfg["clean"] = {"caches_min_mb": 0, "caches_top_n": "invalid"}
+        res = cleaners.clean_target("user-caches", home=home, config=cfg,
+                                    runner=no_apps_running)
+        self.assertEqual([Path(a.path).name for a in res.actions], ["example"])
+        home._td.cleanup()
+
     def test_node_modules_stale_only(self):
         home = make_home()
         proj = home / "proj"
@@ -140,6 +151,23 @@ class TestCleanTarget(unittest.TestCase):
                                     runner=no_apps_running)
         self.assertEqual([Path(a.path).name for a in res.actions], ["node_modules"])
         self.assertIn("old", res.actions[0].path)
+        home._td.cleanup()
+
+    def test_invalid_node_stale_days_uses_default(self):
+        home = make_home()
+        proj = home / "proj"
+        stale = proj / "old" / "node_modules"
+        stale.mkdir(parents=True)
+        put(stale, "pkg.js", 100)
+        old = time.time() - 40 * 86400
+        os.utime(stale, (old, old))
+        cfg = dict(DEFAULTS)
+        cfg["clean"] = {"node_stale_days": "invalid"}
+        cfg["projects"] = [str(proj)]
+        res = cleaners.clean_target("node-modules-stale", home=home, config=cfg,
+                                    runner=no_apps_running)
+        self.assertEqual([Path(a.path).name for a in res.actions],
+                         ["node_modules"])
         home._td.cleanup()
 
     def test_unknown_target(self):

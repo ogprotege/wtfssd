@@ -39,6 +39,15 @@ class TestCrashes(unittest.TestCase):
             self.assertEqual(rep.weekly, {"Cursor": 2, "Claude": 1})
             self.assertEqual(rep.total_weekly, 3)
 
+    def test_helper_crashes_roll_up_to_parent_app(self):
+        with tempfile.TemporaryDirectory() as td:
+            d = Path(td)
+            _make(d, "Cursor Helper (Renderer)-2026-07-29-123456.ips", 1)
+            _make(d, "Claude Helper (Plugin)-2026-07-29-123456.ips", 1)
+            rep = crashes.collect_crashes(APPS, dir=d, now=NOW)
+            self.assertEqual(rep.weekly, {"Cursor": 1, "Claude": 1})
+            self.assertEqual(rep.total_weekly, 2)
+
     def test_missing_dir_is_zero_not_error(self):
         rep = crashes.collect_crashes(
             APPS, dir=Path("/nonexistent-diag-x"), now=NOW)

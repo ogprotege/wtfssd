@@ -59,6 +59,16 @@ class TestReport(unittest.TestCase):
         self.assertIn("unavailable", text.lower())
         self.assertIn("100/100", text)
 
+    def test_text_tier_skip_does_not_recommend_smartmontools(self):
+        rep = models.make_empty_report("2026-07-30T10:53:07", 16.0)
+        rep.scan_tier = "micro"
+        rep.smart = models.SmartReport(
+            available=False, error="not collected (tier=micro)")
+        text = report.render_text(rep, [])
+        self.assertIn("not collected (tier=micro)", text)
+        self.assertNotIn("brew install smartmontools", text)
+        self.assertNotIn("machine looks healthy", text)
+
     def test_text_shows_top_writers_when_available(self):
         rep, findings = sample()
         rep.writers = models.WritersReport(

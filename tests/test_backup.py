@@ -56,6 +56,20 @@ class TestBackup(unittest.TestCase):
         self.assertTrue(rep.destination_present)
         self.assertAlmostEqual(rep.last_backup_age_hours, 24.0, places=1)
 
+    def test_mount_failure_overrides_stale_mount_point(self):
+        def runner(cmd):
+            if "destinationinfo" in cmd:
+                return ("Name : MOGD28TB\n"
+                        "Mount Point : /Volumes/MOGD28TB\n")
+            if "latestbackup" in cmd:
+                return "Failed to mount backup destination, error: offline\n"
+            return None
+
+        rep = backup.collect_backup(runner=runner, now=NOW)
+        self.assertTrue(rep.configured)
+        self.assertFalse(rep.destination_present)
+        self.assertIsNone(rep.last_backup_age_hours)
+
     def test_collect_not_configured(self):
         rep = backup.collect_backup(
             runner=lambda cmd: "" if "tmutil" in cmd else None, now=NOW)

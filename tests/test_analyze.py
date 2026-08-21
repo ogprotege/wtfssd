@@ -70,6 +70,14 @@ class TestAnalyze(unittest.TestCase):
         f = next(f for f in findings if f.code == "smart.unavailable")
         self.assertEqual(f.severity, "info")
 
+    def test_tier_skipped_smart_emits_no_unavailable_finding(self):
+        rep = base_report()
+        rep.scan_tier = "micro"
+        rep.smart = models.SmartReport(
+            available=False, error="not collected (tier=micro)")
+        findings = analyze.analyze(rep, [], DEFAULTS)
+        self.assertNotIn("smart.unavailable", codes(findings))
+
     def test_swap_thresholds(self):
         rep = base_report()
         rep.swap.used_mb = 9 * 1024
