@@ -121,6 +121,16 @@ def _existing(base: Path, names: list[str]) -> list[Path]:
     return [base / n for n in names if (base / n).exists()]
 
 
+def _clean_int(cfg: dict, key: str, default: int) -> int:
+    clean = cfg.get("clean", {})
+    if not isinstance(clean, dict):
+        return default
+    try:
+        return int(clean.get(key, default))
+    except (TypeError, ValueError):
+        return default
+
+
 # --- target collectors: (home, config) -> [CleanupItem] ---
 
 def _cursor_caches(home: Path, cfg: dict) -> list[CleanupItem]:
@@ -163,8 +173,8 @@ def _xcode_devicesupport(home: Path, cfg: dict) -> list[CleanupItem]:
 
 def _user_caches(home: Path, cfg: dict) -> list[CleanupItem]:
     caches = home / "Library/Caches"
-    min_bytes = int(cfg.get("clean", {}).get("caches_min_mb", 500)) * 1024 * 1024
-    top_n = int(cfg.get("clean", {}).get("caches_top_n", 10))
+    min_bytes = _clean_int(cfg, "caches_min_mb", 500) * 1024 * 1024
+    top_n = _clean_int(cfg, "caches_top_n", 10)
     sized = [(d, dir_size_bytes(d)) for d in _subdirs(caches) if d.is_dir()]
     big = sorted(((d, s) for d, s in sized if s >= min_bytes),
                  key=lambda t: t[1], reverse=True)[:top_n]
@@ -172,7 +182,7 @@ def _user_caches(home: Path, cfg: dict) -> list[CleanupItem]:
 
 
 def _node_modules_stale(home: Path, cfg: dict) -> list[CleanupItem]:
-    days = int(cfg.get("clean", {}).get("node_stale_days", 30))
+    days = _clean_int(cfg, "node_stale_days", 30)
     cutoff = time.time() - days * 86400
     found: list[Path] = []
     for root in cfg.get("projects", []):
@@ -265,6 +275,7 @@ def clean_target(target_id: str, home: Path | None = None,
     result = CleanResult(target_id=target_id, applied=apply)
 
     if apply and target.guard_app and not force and _app_running(target.guard_app, runner):
+        result.applied = False
         result.skipped_reason = (f"{target.guard_app} is running — quit it first "
                                  f"(Cmd+Q) or pass --force")
         return result

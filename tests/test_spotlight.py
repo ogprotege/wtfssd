@@ -16,6 +16,8 @@ class TestSpotlight(unittest.TestCase):
     def test_parse_mdutil(self):
         self.assertTrue(spotlight.parse_mdutil("/:\n\tIndexing enabled. "))
         self.assertFalse(spotlight.parse_mdutil("/:\n\tIndexing disabled."))
+        self.assertIs(spotlight.parse_mdutil(
+            "/:\n\tIndexing and searching disabled."), False)
         self.assertIsNone(spotlight.parse_mdutil("garbage"))
 
     def test_parse_mds_cpu(self):

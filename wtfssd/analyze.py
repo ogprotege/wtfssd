@@ -50,12 +50,13 @@ def analyze(report: HealthReport, history: list[HealthReport],
 
     # --- SMART / SSD wear ---
     smart = report.smart
-    if not smart.available:
+    skipped_smart = (smart.error or "").startswith("not collected (tier=")
+    if not smart.available and not skipped_smart:
         findings.append(_f("monitor", "info", "smart.unavailable",
             "SMART data unavailable",
             smart.error or "smartctl not found",
             "Install smartmontools (brew install smartmontools) for ground-truth SSD wear data."))
-    else:
+    elif smart.available:
         if smart.health and smart.health != "PASSED":
             findings.append(_f("monitor", "critical", "smart.health_failed",
                 "Drive health self-assessment failed",

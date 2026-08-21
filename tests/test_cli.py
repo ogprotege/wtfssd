@@ -10,6 +10,7 @@ from unittest import mock
 
 from wtfssd import cli, models
 from wtfssd import config as config_mod
+from wtfssd.cleaners import CleanAction, CleanResult
 
 
 def fake_report() -> models.HealthReport:
@@ -190,13 +191,24 @@ class TestCli(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td, \
              mock.patch("wtfssd.cleaners.clean_target") as ct, \
              redirect_stdout(io.StringIO()) as buf:
-            from wtfssd.cleaners import CleanResult, CleanAction
             ct.return_value = CleanResult("cursor-caches", False, actions=[
                 CleanAction("/x/Cache", 500, "would-trash")])
             code = cli.main(["clean", "cursor-caches"])
         self.assertEqual(code, 0)
         self.assertIn("would-trash", buf.getvalue())
         self.assertIn("500", buf.getvalue())
+
+    def test_clean_dry_run_total_excludes_denied_actions(self):
+        with mock.patch("wtfssd.cleaners.clean_target") as ct, \
+             redirect_stdout(io.StringIO()) as buf:
+            ct.return_value = CleanResult("cursor-caches", False, actions=[
+                CleanAction("/denied", 500, "denied"),
+                CleanAction("/allowed", 100, "would-trash"),
+            ])
+            code = cli.main(["clean", "cursor-caches"])
+        self.assertEqual(code, 0)
+        self.assertIn("dry-run — would free 100 B", buf.getvalue())
+        self.assertNotIn("would free 600 B", buf.getvalue())
 
     def test_clean_unknown_target_exit3(self):
         with redirect_stdout(io.StringIO()):
@@ -206,7 +218,6 @@ class TestCli(unittest.TestCase):
     def test_clean_action_error_exits_3(self):
         with mock.patch("wtfssd.cleaners.clean_target") as ct, \
              redirect_stdout(io.StringIO()):
-            from wtfssd.cleaners import CleanResult, CleanAction
             ct.return_value = CleanResult("cursor-caches", True, actions=[
                 CleanAction("/x/Cache", 500, "error", error="EPERM")])
             code = cli.main(["clean", "cursor-caches", "--apply"])

@@ -44,11 +44,15 @@ def parse_ps(text: str, ghost_seconds: int) -> ProcessReport:
         pid, ppid, etime, rss_kb, comm = parts
         if not is_ide_process(comm):
             continue
+        try:
+            proc = GhostProcess(
+                pid=int(pid), ppid=int(ppid), name=comm.strip(),
+                age_seconds=etime_to_seconds(etime),
+                rss_mb=int(rss_kb) / 1024,
+            )
+        except ValueError:
+            continue
         total += 1
-        proc = GhostProcess(
-            pid=int(pid), ppid=int(ppid), name=comm.strip(),
-            age_seconds=etime_to_seconds(etime), rss_mb=int(rss_kb) / 1024,
-        )
         ide_procs.append(proc)
         if proc.age_seconds >= ghost_seconds:
             ghosts.append(proc)

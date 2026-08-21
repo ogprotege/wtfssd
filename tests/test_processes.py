@@ -71,6 +71,17 @@ class TestParsePs(unittest.TestCase):
         self.assertEqual(rep.total_ide_processes, 0)
         self.assertIsNotNone(rep.note)
 
+    def test_collect_skips_unparseable_ide_rows(self):
+        text = (
+            "9001 1 01:00:00 1000 "
+            "/Applications/Cursor.app/Contents/MacOS/Cursor\n"
+            "9002 1 bad-etime 2000 "
+            "/Applications/Cursor.app/Contents/MacOS/Cursor\n"
+        )
+        rep = processes.collect_processes(runner=fake_runner(text))
+        self.assertEqual(rep.total_ide_processes, 1)
+        self.assertEqual([proc.pid for proc in rep.ide_procs], [9001])
+
     def test_ide_procs_all_ages_sorted_by_rss(self):
         text = (Path(__file__).parent / "fixtures" / "ps.txt").read_text()
         rep = processes.parse_ps(text, ghost_seconds=3 * 86400)

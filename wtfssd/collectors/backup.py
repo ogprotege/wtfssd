@@ -39,6 +39,8 @@ def collect_backup(runner: Callable = run_cmd,
 
     latest_out = runner(["tmutil", "latestbackup"])
     if latest_out is not None:
+        if "failed to mount" in latest_out.casefold():
+            rep.destination_present = False
         date_str = parse_latest_backup_date(latest_out)
         if date_str:
             rep.destination_present = True  # a completed backup implies access
