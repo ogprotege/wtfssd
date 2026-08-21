@@ -67,6 +67,7 @@ class TestReport(unittest.TestCase):
         text = report.render_text(rep, [])
         self.assertIn("not collected (tier=micro)", text)
         self.assertNotIn("brew install smartmontools", text)
+        self.assertNotIn("0 B  TOTAL", text)
         self.assertNotIn("machine looks healthy", text)
 
     def test_text_shows_top_writers_when_available(self):
