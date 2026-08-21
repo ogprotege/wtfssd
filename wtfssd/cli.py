@@ -267,7 +267,9 @@ def cmd_clean(args: argparse.Namespace) -> int:
         if res.applied:
             print(f"  freed: {report_mod.format_bytes(res.freed_bytes)}")
         else:
-            total = sum(a.size_bytes for a in res.actions)
+            total = sum(
+                a.size_bytes for a in res.actions
+                if a.action in ("would-trash", "would-delete"))
             print(f"  dry-run — would free {report_mod.format_bytes(total)} "
                   f"(pass --apply)")
     return 3 if had_error else 0
